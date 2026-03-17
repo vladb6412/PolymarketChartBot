@@ -5,6 +5,7 @@ import { isoNow } from "./lib/time.js";
 import { RunStore } from "./persistence/runStore.js";
 import { discoverBtcFiveMinuteMarkets } from "./polymarket/discovery.js";
 import { PolymarketFeed } from "./polymarket/feed.js";
+import { fetchOfficialLast24HourOutcomeStats } from "./polymarket/officialOutcomeStats.js";
 
 function buildRunId(market) {
   return `${market.slug}-${market.startTimestamp}-${Date.now()}`
@@ -277,6 +278,6 @@ export class MonitorService extends EventEmitter {
   }
 
   async getLast24HourOutcomeStats() {
-    return this.store.getLast24HourOutcomeStats();
+    return fetchOfficialLast24HourOutcomeStats();
   }
 }

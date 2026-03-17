@@ -439,9 +439,7 @@ function renderLast24HourStats() {
     return;
   }
 
-  elements.statsSummaryNote.textContent = `Completed runs: ${
-    stats.concludedRuns
-  } · inferred via carried-forward last observation: ${stats.inferredCount}`;
+  elements.statsSummaryNote.textContent = `Official Polymarket closed outcomes over the last 24 hours. Counted runs: ${stats.concludedRuns}`;
 }
 
 function render() {
