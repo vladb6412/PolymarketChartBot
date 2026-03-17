@@ -453,7 +453,7 @@ function render() {
     : "-";
   elements.savedRuns.textContent = `${state.runCatalog.length}`;
   elements.selectedRunIdLabel.textContent = state.selectedRunId || "-";
-  elements.dataPath.textContent = "data/runs/*.jsonl";
+  elements.dataPath.textContent = "data/runs/*.jsonl.gz + live .jsonl";
 
   renderCurrentPriceCard(prices[outcomes[0]?.key], elements.upPrice, elements.upDetail);
   renderCurrentPriceCard(prices[outcomes[1]?.key], elements.downPrice, elements.downDetail);

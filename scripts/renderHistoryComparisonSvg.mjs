@@ -1,8 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { readRunArtifactPoints, resolveRunArtifactPath } from "../src/persistence/runArtifacts.js";
+
 const root = process.cwd();
 const previewsDir = path.join(root, "data", "previews");
+const runsDirectory = path.join(root, "data", "runs");
 
 function escapeXml(value) {
   return `${value}`
@@ -45,12 +48,8 @@ function formatTimeWindow(startValue, endValue) {
 }
 
 async function loadRunFromFile(runId) {
-  const runPath = path.join(root, "data", "runs", `${runId}.jsonl`);
-  const raw = await fs.readFile(runPath, "utf8");
-  const points = raw
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => JSON.parse(line));
+  const runPath = await resolveRunArtifactPath(runsDirectory, runId);
+  const points = await readRunArtifactPoints(runPath);
 
   if (points.length === 0) {
     throw new Error(`Run file has no snapshots: ${runId}`);

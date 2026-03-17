@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
+    "sync-remote": "node scripts/syncRemoteRuns.mjs",
     "install-agent": "bash scripts/installLaunchAgent.sh",
     "uninstall-agent": "bash scripts/uninstallLaunchAgent.sh",
     "test": "node --test"

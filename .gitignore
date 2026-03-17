@@ -3,4 +3,5 @@ data/*.json
 data/*.jsonl
 data/logs/*.log
 data/runs/*.jsonl
+data/runs/*.jsonl.gz
 data/runs/*.json

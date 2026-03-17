@@ -2,9 +2,17 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  RAW_RUN_STORAGE_FORMAT,
+  buildRunArtifactFileName,
+  readRunArtifactPoints,
+  resolveRunArtifactPath
+} from "../src/persistence/runArtifacts.js";
+
 export const root = process.cwd();
 export const indexPath = path.join(root, "data", "runs-index.json");
 export const previewsDir = path.join(root, "data", "previews");
+const runsDirectory = path.join(root, "data", "runs");
 
 function escapeXml(value) {
   return `${value}`
@@ -57,12 +65,14 @@ export async function loadRun(runId) {
     throw new Error("No recorded runs found.");
   }
 
-  const pointsPath = path.join(root, "data", "runs", `${run.id}.jsonl`);
-  const raw = await fs.readFile(pointsPath, "utf8");
-  const points = raw
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => JSON.parse(line));
+  const pointsPath = await resolveRunArtifactPath(runsDirectory, run.id, {
+    ...run,
+    storageFormat: run.storageFormat || RAW_RUN_STORAGE_FORMAT,
+    fileName:
+      run.fileName ||
+      buildRunArtifactFileName(run.id, run.storageFormat || RAW_RUN_STORAGE_FORMAT)
+  });
+  const points = await readRunArtifactPoints(pointsPath);
 
   return { run, points };
 }

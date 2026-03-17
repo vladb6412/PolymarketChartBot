@@ -79,9 +79,35 @@ function routeApi(request, response, url) {
 
   if (url.pathname === "/api/runs") {
     const limit = Number(url.searchParams.get("limit") || 50);
+    const offset = Number(url.searchParams.get("offset") || 0);
     monitor
-      .listRuns(limit)
+      .listRuns(limit, offset)
       .then((runs) => sendJson(response, 200, { runs }))
+      .catch((error) => sendJson(response, 500, { error: error.message }));
+    return true;
+  }
+
+  if (url.pathname.startsWith("/api/runs/") && url.pathname.endsWith("/archive")) {
+    const runId = decodeURIComponent(
+      url.pathname.replace("/api/runs/", "").replace(/\/archive$/, "")
+    );
+
+    monitor
+      .getRunArtifact(runId)
+      .then(async (artifact) => {
+        if (!artifact) {
+          sendJson(response, 404, { error: "Run not found" });
+          return;
+        }
+
+        const body = await fs.readFile(artifact.path);
+        response.writeHead(200, {
+          "content-type": artifact.contentType,
+          "cache-control": "no-store",
+          "content-disposition": `attachment; filename="${artifact.fileName}"`
+        });
+        response.end(body);
+      })
       .catch((error) => sendJson(response, 500, { error: error.message }));
     return true;
   }

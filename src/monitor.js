@@ -261,11 +261,15 @@ export class MonitorService extends EventEmitter {
     this.emit("state", this.getState());
   }
 
-  async listRuns(limit = 50) {
-    return this.store.listRuns(limit);
+  async listRuns(limit = 50, offset = 0) {
+    return this.store.listRuns(limit, offset);
   }
 
   async loadRun(runId) {
     return this.store.loadRun(runId);
+  }
+
+  async getRunArtifact(runId) {
+    return this.store.getRunArtifact(runId);
   }
 }
