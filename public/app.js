@@ -2,6 +2,7 @@ const state = {
   axisMode: "elapsed",
   followLive: true,
   liveState: null,
+  last24HourStats: null,
   runCatalog: [],
   selectedRunId: null,
   selectedRun: null,
@@ -27,6 +28,11 @@ const elements = {
   marketRecording: document.querySelector("#market-recording"),
   marketPoints: document.querySelector("#market-points"),
   nextMarketWindow: document.querySelector("#next-market-window"),
+  statsUpCount: document.querySelector("#stats-up-count"),
+  statsDownCount: document.querySelector("#stats-down-count"),
+  statsMaxUpStreak: document.querySelector("#stats-max-up-streak"),
+  statsMaxDownStreak: document.querySelector("#stats-max-down-streak"),
+  statsSummaryNote: document.querySelector("#stats-summary-note"),
   savedRuns: document.querySelector("#saved-runs"),
   selectedRunIdLabel: document.querySelector("#selected-run-id"),
   dataPath: document.querySelector("#data-path"),
@@ -120,6 +126,10 @@ function mergeRunCatalog(runs) {
 async function refreshRunCatalog(limit = 500) {
   const payload = await fetchJson(`/api/runs?limit=${limit}`);
   mergeRunCatalog(payload.runs);
+}
+
+async function refreshLast24HourStats() {
+  state.last24HourStats = await fetchJson("/api/stats/last-24h");
 }
 
 function getSelectedRunIndex() {
@@ -416,6 +426,24 @@ function renderNavigation() {
   elements.nextRunButton.disabled = selectedIndex <= 0;
 }
 
+function renderLast24HourStats() {
+  const stats = state.last24HourStats;
+
+  elements.statsUpCount.textContent = `${stats?.upCount ?? "-"}`;
+  elements.statsDownCount.textContent = `${stats?.downCount ?? "-"}`;
+  elements.statsMaxUpStreak.textContent = `${stats?.maxConsecutiveUp ?? "-"}`;
+  elements.statsMaxDownStreak.textContent = `${stats?.maxConsecutiveDown ?? "-"}`;
+
+  if (!stats) {
+    elements.statsSummaryNote.textContent = "Loading the last 24-hour outcome summary.";
+    return;
+  }
+
+  elements.statsSummaryNote.textContent = `Completed runs: ${
+    stats.concludedRuns
+  } · inferred via carried-forward last observation: ${stats.inferredCount}`;
+}
+
 function render() {
   syncSelectedRunSummary();
 
@@ -458,6 +486,7 @@ function render() {
   renderCurrentPriceCard(prices[outcomes[0]?.key], elements.upPrice, elements.upDetail);
   renderCurrentPriceCard(prices[outcomes[1]?.key], elements.downPrice, elements.downDetail);
   renderNavigation();
+  renderLast24HourStats();
   drawChart(runDetail);
 }
 
@@ -476,12 +505,14 @@ function navigateRun(offset) {
 }
 
 async function initialize() {
-  const [liveState, catalog] = await Promise.all([
+  const [liveState, catalog, last24HourStats] = await Promise.all([
     fetchJson("/api/status"),
-    fetchJson("/api/runs?limit=500")
+    fetchJson("/api/runs?limit=500"),
+    fetchJson("/api/stats/last-24h")
   ]);
 
   state.liveState = liveState;
+  state.last24HourStats = last24HourStats;
   mergeRunCatalog(catalog.runs);
   mergeRunCatalog(liveState.recentRuns || []);
   ensureSelectedRun();
@@ -489,15 +520,22 @@ async function initialize() {
 
   const stream = new EventSource("/api/stream");
   stream.addEventListener("state", (event) => {
+    const previousRunId = state.liveState?.currentRun?.id || null;
     state.liveState = JSON.parse(event.data);
     mergeRunCatalog(state.liveState.recentRuns || []);
     appendLiveSnapshotIfNeeded();
     ensureSelectedRun();
     render();
+
+    if (previousRunId !== state.liveState?.currentRun?.id) {
+      refreshLast24HourStats().then(render).catch(console.error);
+    }
   });
 
   setInterval(() => {
-    refreshRunCatalog().then(render).catch(console.error);
+    Promise.all([refreshRunCatalog(), refreshLast24HourStats()])
+      .then(() => render())
+      .catch(console.error);
   }, 60_000);
 }
 

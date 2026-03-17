@@ -275,4 +275,8 @@ export class MonitorService extends EventEmitter {
   async getRunArtifact(runId) {
     return this.store.getRunArtifact(runId);
   }
+
+  async getLast24HourOutcomeStats() {
+    return this.store.getLast24HourOutcomeStats();
+  }
 }

@@ -2,6 +2,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { config } from "../config.js";
+import {
+  buildLast24HourOutcomeStats,
+  inferOutcomeFromPoints,
+  selectRepresentativeCompletedRuns
+} from "../domain/outcomeStats.js";
 import { ensureDirectory, readJsonFile, writeJsonFile } from "../lib/fs.js";
 import { compareIsoStrings, isoNow } from "../lib/time.js";
 import {
@@ -25,6 +30,7 @@ export class RunStore {
     this.ready = false;
     this.indexWriteTimer = null;
     this.pendingCompression = new Map();
+    this.last24HourStatsCache = null;
   }
 
   async init() {
@@ -174,6 +180,7 @@ export class RunStore {
     }
 
     this.index.sort((left, right) => compareIsoStrings(right.startedAt, left.startedAt));
+    this.invalidateDerivedCaches();
     await writeJsonFile(runIndexPath, this.index);
   }
 
@@ -423,7 +430,12 @@ export class RunStore {
     }
 
     this.index = this.index.filter((entry) => entry.id !== runId);
+    this.invalidateDerivedCaches();
     await writeJsonFile(runIndexPath, this.index);
+  }
+
+  invalidateDerivedCaches() {
+    this.last24HourStatsCache = null;
   }
 
   async findResumableRun(market) {
@@ -529,6 +541,70 @@ export class RunStore {
           ? "application/gzip"
           : "application/x-ndjson; charset=utf-8"
     };
+  }
+
+  async getLast24HourOutcomeStats(options = {}) {
+    if (!this.ready) {
+      await this.init();
+    }
+
+    const hours = options.hours || 24;
+    const now = options.now ?? Date.now();
+    const useCache =
+      options.now === undefined &&
+      hours === 24 &&
+      this.last24HourStatsCache &&
+      Date.now() - this.last24HourStatsCache.computedAt < 30_000;
+
+    if (useCache) {
+      return this.last24HourStatsCache.payload;
+    }
+
+    const cutoff = now - hours * 60 * 60 * 1000;
+    const recentCompletedRuns = selectRepresentativeCompletedRuns(
+      this.index.filter((entry) => {
+        if (entry.status === "live" || entry.status === "interrupted") {
+          return false;
+        }
+
+        const marketEndTimestamp = timestampOf(entry.endsAt || entry.endedAt);
+        return marketEndTimestamp >= cutoff && marketEndTimestamp <= now;
+      })
+    );
+
+    const concludedRuns = [];
+
+    for (const summary of recentCompletedRuns) {
+      const detail = await this.loadRun(summary.id);
+      const inferredOutcome = inferOutcomeFromPoints(detail?.run || summary, detail?.points || []);
+
+      if (!inferredOutcome.outcomeKey) {
+        continue;
+      }
+
+      concludedRuns.push({
+        id: summary.id,
+        startedAt: summary.startedAt,
+        endsAt: summary.endsAt,
+        status: summary.status,
+        outcomeKey: inferredOutcome.outcomeKey,
+        source: inferredOutcome.source
+      });
+    }
+
+    const payload = buildLast24HourOutcomeStats(concludedRuns, {
+      hours,
+      now
+    });
+
+    if (options.now === undefined && hours === 24) {
+      this.last24HourStatsCache = {
+        computedAt: Date.now(),
+        payload
+      };
+    }
+
+    return payload;
   }
 
   async flush() {

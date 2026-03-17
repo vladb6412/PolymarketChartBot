@@ -87,6 +87,14 @@ function routeApi(request, response, url) {
     return true;
   }
 
+  if (url.pathname === "/api/stats/last-24h") {
+    monitor
+      .getLast24HourOutcomeStats()
+      .then((stats) => sendJson(response, 200, stats))
+      .catch((error) => sendJson(response, 500, { error: error.message }));
+    return true;
+  }
+
   if (url.pathname.startsWith("/api/runs/") && url.pathname.endsWith("/archive")) {
     const runId = decodeURIComponent(
       url.pathname.replace("/api/runs/", "").replace(/\/archive$/, "")

@@ -131,6 +131,36 @@
           <section class="panel">
             <div class="panel-header">
               <div>
+                <p class="panel-label">Last 24 Hours</p>
+                <h2>Outcome summary</h2>
+              </div>
+            </div>
+            <dl class="metrics">
+              <div>
+                <dt>Concluded UP</dt>
+                <dd id="stats-up-count">-</dd>
+              </div>
+              <div>
+                <dt>Concluded DOWN</dt>
+                <dd id="stats-down-count">-</dd>
+              </div>
+              <div>
+                <dt>Max consecutive UP</dt>
+                <dd id="stats-max-up-streak">-</dd>
+              </div>
+              <div>
+                <dt>Max consecutive DOWN</dt>
+                <dd id="stats-max-down-streak">-</dd>
+              </div>
+            </dl>
+            <p id="stats-summary-note" class="panel-note">
+              Uses completed runs from the last 24 hours.
+            </p>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
                 <p class="panel-label">Storage</p>
                 <h2>Saved data</h2>
               </div>
