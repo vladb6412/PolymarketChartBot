@@ -1,3 +1,5 @@
+const monitorConfig = window.MONITOR_CONFIG || {};
+
 const state = {
   axisMode: "elapsed",
   followLive: true,
@@ -38,6 +40,16 @@ const elements = {
 };
 
 const chartContext = elements.chartCanvas.getContext("2d");
+const apiBasePath = `${monitorConfig.apiBasePath || "/api"}`.replace(/\/+$/, "");
+const defaultDurationMinutes = Number(monitorConfig.defaultDurationMinutes) || 5;
+const storagePathLabel =
+  monitorConfig.storagePathLabel || "data/runs/*.jsonl.gz + live .jsonl";
+const waitingChartTitle = monitorConfig.waitingChartTitle || "Waiting for market data";
+const failedChartTitle = monitorConfig.failedChartTitle || "Failed to load monitor";
+
+function apiPath(suffix) {
+  return `${apiBasePath}${suffix}`;
+}
 
 function compareRuns(left, right) {
   return new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime();
@@ -86,6 +98,14 @@ function formatSpread(value) {
   return `spread ${(value * 100).toFixed(1)}c`;
 }
 
+function formatAxisMinutes(value) {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+
+  return Number.isInteger(value) ? `${value}` : value.toFixed(1);
+}
+
 async function fetchJson(url) {
   const response = await fetch(url, {
     headers: {
@@ -98,6 +118,22 @@ async function fetchJson(url) {
   }
 
   return response.json();
+}
+
+function getRunDurationMinutes(run) {
+  const startValue = run?.startedAt || run?.startDate || run?.marketStartedAt || null;
+  const endValue = run?.endsAt || run?.endDate || run?.marketEndsAt || null;
+
+  if (startValue && endValue) {
+    const durationMinutes =
+      (new Date(endValue).getTime() - new Date(startValue).getTime()) / 60_000;
+
+    if (Number.isFinite(durationMinutes) && durationMinutes > 0) {
+      return durationMinutes;
+    }
+  }
+
+  return defaultDurationMinutes;
 }
 
 function getCurrentRunFromLiveState() {
@@ -118,7 +154,7 @@ function mergeRunCatalog(runs) {
 }
 
 async function refreshRunCatalog(limit = 500) {
-  const payload = await fetchJson(`/api/runs?limit=${limit}`);
+  const payload = await fetchJson(apiPath(`/runs?limit=${limit}`));
   mergeRunCatalog(payload.runs);
 }
 
@@ -131,7 +167,7 @@ async function loadRun(runId) {
   const version = state.loadVersion + 1;
   state.loadVersion = version;
 
-  const payload = await fetchJson(`/api/runs/${encodeURIComponent(runId)}`);
+  const payload = await fetchJson(apiPath(`/runs/${encodeURIComponent(runId)}`));
 
   if (version !== state.loadVersion) {
     return;
@@ -268,6 +304,8 @@ function extractSeries(runDetail) {
     return [];
   }
 
+  const durationMinutes = getRunDurationMinutes(runDetail.run);
+
   return runDetail.run.outcomes.map((outcome, index) => ({
     ...outcome,
     color: lineColorForKey(outcome.key, index),
@@ -283,7 +321,7 @@ function extractSeries(runDetail) {
               ),
         y: point.prices?.[outcome.key]?.displayedPrice ?? null
       }))
-      .filter((point) => point.y !== null)
+      .filter((point) => point.y !== null && point.x <= durationMinutes)
   }));
 }
 
@@ -301,6 +339,7 @@ function drawChart(runDetail) {
   const padding = { top: 28, right: 24, bottom: 46, left: 54 };
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
+  const durationMinutes = getRunDurationMinutes(runDetail?.run);
 
   chartContext.fillStyle = "#fffaf1";
   chartContext.fillRect(0, 0, width, height);
@@ -344,9 +383,12 @@ function drawChart(runDetail) {
 
   chartContext.textAlign = "center";
   for (let step = 0; step <= 5; step += 1) {
-    const xValue = state.axisMode === "elapsed" ? step : 5 - step;
+    const xValue =
+      state.axisMode === "elapsed"
+        ? (durationMinutes / 5) * step
+        : durationMinutes - (durationMinutes / 5) * step;
     const x = padding.left + (plotWidth / 5) * step;
-    chartContext.fillText(`${xValue.toFixed(0)}m`, x, height - padding.bottom + 24);
+    chartContext.fillText(`${formatAxisMinutes(xValue)}m`, x, height - padding.bottom + 24);
   }
 
   const series = extractSeries(runDetail);
@@ -363,7 +405,7 @@ function drawChart(runDetail) {
     chartContext.beginPath();
 
     entry.points.forEach((point, pointIndex) => {
-      const x = padding.left + (point.x / 5) * plotWidth;
+      const x = padding.left + (point.x / durationMinutes) * plotWidth;
       const y = padding.top + (1 - point.y) * plotHeight;
 
       if (pointIndex === 0) {
@@ -377,7 +419,7 @@ function drawChart(runDetail) {
 
     const latest = entry.points.at(-1);
     if (latest) {
-      const x = padding.left + (latest.x / 5) * plotWidth;
+      const x = padding.left + (latest.x / durationMinutes) * plotWidth;
       const y = padding.top + (1 - latest.y) * plotHeight;
       chartContext.fillStyle = entry.color;
       chartContext.beginPath();
@@ -431,7 +473,7 @@ function render() {
 
   elements.phaseBadge.textContent = state.liveState?.phase || "idle";
   elements.selectionBadge.textContent = state.followLive ? "live" : "history";
-  elements.chartTitle.textContent = run?.question || "Waiting for market data";
+  elements.chartTitle.textContent = run?.question || waitingChartTitle;
   elements.chartWindow.textContent = run
     ? `${formatWindow(run.startedAt, run.endsAt)} · ${run.status || "recording"}`
     : "Waiting for market window";
@@ -453,7 +495,7 @@ function render() {
     : "-";
   elements.savedRuns.textContent = `${state.runCatalog.length}`;
   elements.selectedRunIdLabel.textContent = state.selectedRunId || "-";
-  elements.dataPath.textContent = "data/runs/*.jsonl.gz + live .jsonl";
+  elements.dataPath.textContent = storagePathLabel;
 
   renderCurrentPriceCard(prices[outcomes[0]?.key], elements.upPrice, elements.upDetail);
   renderCurrentPriceCard(prices[outcomes[1]?.key], elements.downPrice, elements.downDetail);
@@ -477,8 +519,8 @@ function navigateRun(offset) {
 
 async function initialize() {
   const [liveState, catalog] = await Promise.all([
-    fetchJson("/api/status"),
-    fetchJson("/api/runs?limit=500")
+    fetchJson(apiPath("/status")),
+    fetchJson(apiPath("/runs?limit=500"))
   ]);
 
   state.liveState = liveState;
@@ -487,7 +529,7 @@ async function initialize() {
   ensureSelectedRun();
   render();
 
-  const stream = new EventSource("/api/stream");
+  const stream = new EventSource(apiPath("/stream"));
   stream.addEventListener("state", (event) => {
     state.liveState = JSON.parse(event.data);
     mergeRunCatalog(state.liveState.recentRuns || []);
@@ -537,5 +579,5 @@ window.addEventListener("resize", () => render());
 
 initialize().catch((error) => {
   console.error(error);
-  elements.chartTitle.textContent = "Failed to load monitor";
+  elements.chartTitle.textContent = failedChartTitle;
 });

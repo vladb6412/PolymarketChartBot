@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  isBtcFifteenMinuteMarket,
   isBtcFiveMinuteMarket,
   normalizeTrackedMarket,
   selectRelevantMarket
@@ -48,6 +49,27 @@ test("isBtcFiveMinuteMarket excludes the 15-minute slug family", () => {
     }),
     false
   );
+});
+
+test("isBtcFifteenMinuteMarket recognizes the BTC 15-minute up/down slug family", () => {
+  assert.equal(
+    isBtcFifteenMinuteMarket({
+      ...exampleMarket,
+      slug: "btc-updown-15m-1773663600",
+      endDate: "2026-03-16T12:35:00.000Z"
+    }),
+    true
+  );
+});
+
+test("normalizeTrackedMarket derives the correct 15-minute end time from the slug", () => {
+  const normalized = normalizeTrackedMarket({
+    ...exampleMarket,
+    slug: "btc-updown-15m-1773663600"
+  });
+
+  assert.equal(normalized.intervalMinutes, 15);
+  assert.equal(normalized.endDate, "2026-03-16T12:35:00.000Z");
 });
 
 test("selectRelevantMarket returns the current market and the next queued market", () => {

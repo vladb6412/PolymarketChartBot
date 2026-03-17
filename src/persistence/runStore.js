@@ -21,11 +21,11 @@ import {
   resolveRunArtifactPath
 } from "./runArtifacts.js";
 
-const runIndexPath = path.join(config.dataDir, "runs-index.json");
-const runsDirectory = path.join(config.dataDir, "runs");
-
 export class RunStore {
-  constructor() {
+  constructor(options = {}) {
+    this.dataDir = options.dataDir || config.dataDir;
+    this.runIndexPath = path.join(this.dataDir, "runs-index.json");
+    this.runsDirectory = path.join(this.dataDir, "runs");
     this.index = [];
     this.ready = false;
     this.indexWriteTimer = null;
@@ -34,17 +34,17 @@ export class RunStore {
   }
 
   async init() {
-    await ensureDirectory(config.dataDir);
-    await ensureDirectory(runsDirectory);
+    await ensureDirectory(this.dataDir);
+    await ensureDirectory(this.runsDirectory);
     try {
-      const loadedIndex = await readJsonFile(runIndexPath, []);
+      const loadedIndex = await readJsonFile(this.runIndexPath, []);
       this.index = Array.isArray(loadedIndex)
         ? loadedIndex.map((entry) => this.normalizeSummary(entry))
         : [];
     } catch (error) {
       console.warn("Run index could not be read, rebuilding from run files", error.message);
       this.index = await this.rebuildIndexFromFiles();
-      await writeJsonFile(runIndexPath, this.index);
+      await writeJsonFile(this.runIndexPath, this.index);
     }
     await this.reconcileLiveRuns();
     this.ready = true;
@@ -52,7 +52,7 @@ export class RunStore {
   }
 
   async rebuildIndexFromFiles() {
-    const files = await fs.readdir(runsDirectory);
+    const files = await fs.readdir(this.runsDirectory);
     const summaries = new Map();
     const sortedFiles = files
       .filter(isRunArtifactFileName)
@@ -112,7 +112,7 @@ export class RunStore {
     }
 
     try {
-      const filePath = path.join(runsDirectory, fileName);
+      const filePath = path.join(this.runsDirectory, fileName);
       const points = await readRunArtifactPoints(filePath);
 
       if (points.length === 0) {
@@ -181,7 +181,7 @@ export class RunStore {
 
     this.index.sort((left, right) => compareIsoStrings(right.startedAt, left.startedAt));
     this.invalidateDerivedCaches();
-    await writeJsonFile(runIndexPath, this.index);
+    await writeJsonFile(this.runIndexPath, this.index);
   }
 
   scheduleIndexWrite() {
@@ -192,7 +192,7 @@ export class RunStore {
     this.indexWriteTimer = setTimeout(async () => {
       this.indexWriteTimer = null;
       try {
-        await writeJsonFile(runIndexPath, this.index);
+        await writeJsonFile(this.runIndexPath, this.index);
       } catch (error) {
         console.error("Failed to flush run index", error);
       }
@@ -200,11 +200,11 @@ export class RunStore {
   }
 
   getRunFilePath(runId, storageFormat = RAW_RUN_STORAGE_FORMAT) {
-    return path.join(runsDirectory, buildRunArtifactFileName(runId, storageFormat));
+    return path.join(this.runsDirectory, buildRunArtifactFileName(runId, storageFormat));
   }
 
   async resolveRunFilePath(runId, summary = null) {
-    return resolveRunArtifactPath(runsDirectory, runId, summary);
+    return resolveRunArtifactPath(this.runsDirectory, runId, summary);
   }
 
   queueArchivedCompressionSweep() {
@@ -322,7 +322,7 @@ export class RunStore {
     const summary = this.index.find((entry) => entry.id === runId);
     const targetPath =
       summary?.fileName
-        ? path.join(runsDirectory, summary.fileName)
+        ? path.join(this.runsDirectory, summary.fileName)
         : this.getRunFilePath(runId, RAW_RUN_STORAGE_FORMAT);
 
     await fs.appendFile(targetPath, `${JSON.stringify(snapshot)}\n`, "utf8");
@@ -431,7 +431,7 @@ export class RunStore {
 
     this.index = this.index.filter((entry) => entry.id !== runId);
     this.invalidateDerivedCaches();
-    await writeJsonFile(runIndexPath, this.index);
+    await writeJsonFile(this.runIndexPath, this.index);
   }
 
   invalidateDerivedCaches() {
@@ -614,7 +614,7 @@ export class RunStore {
     }
 
     await Promise.allSettled(this.pendingCompression.values());
-    await writeJsonFile(runIndexPath, this.index);
+    await writeJsonFile(this.runIndexPath, this.index);
   }
 }
 

@@ -3,11 +3,25 @@ import path from "node:path";
 import fs from "node:fs/promises";
 
 import { config } from "./config.js";
-import { MonitorService } from "./monitor.js";
+import {
+  createFifteenMinuteMonitorService,
+  createFiveMinuteMonitorService
+} from "./monitor.js";
 
 const publicDirectory = path.join(process.cwd(), "public");
-const monitor = new MonitorService();
-const sseClients = new Set();
+const fiveMinuteContext = {
+  apiBasePath: "/api",
+  monitor: createFiveMinuteMonitorService(),
+  sseClients: new Set(),
+  includeOfficialStats: true
+};
+const fifteenMinuteContext = {
+  apiBasePath: "/api/15minutebtc",
+  monitor: createFifteenMinuteMonitorService(),
+  sseClients: new Set(),
+  includeOfficialStats: false
+};
+const monitorContexts = [fifteenMinuteContext, fiveMinuteContext];
 
 const contentTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -31,8 +45,8 @@ function sendSseEvent(response, event, payload) {
   response.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
-function broadcast(event, payload) {
-  for (const response of sseClients) {
+function broadcast(clients, event, payload) {
+  for (const response of clients) {
     sendSseEvent(response, event, payload);
   }
 }
@@ -44,6 +58,8 @@ async function serveStatic(requestPath, response) {
     safePath = "/index.html";
   } else if (requestPath === "/previousstats") {
     safePath = "/previousstats.html";
+  } else if (requestPath === "/15minutebtc") {
+    safePath = "/15minutebtc.html";
   }
 
   const targetPath = path.join(publicDirectory, safePath);
@@ -73,41 +89,44 @@ async function serveStatic(requestPath, response) {
   }
 }
 
-function routeApi(request, response, url) {
+function routeMonitorApi(request, response, url, context) {
   if (request.method !== "GET") {
     sendJson(response, 405, { error: "Method not allowed" });
     return true;
   }
 
-  if (url.pathname === "/api/status") {
-    sendJson(response, 200, monitor.getState());
+  if (url.pathname === `${context.apiBasePath}/status`) {
+    sendJson(response, 200, context.monitor.getState());
     return true;
   }
 
-  if (url.pathname === "/api/runs") {
+  if (url.pathname === `${context.apiBasePath}/runs`) {
     const limit = Number(url.searchParams.get("limit") || 50);
     const offset = Number(url.searchParams.get("offset") || 0);
-    monitor
+    context.monitor
       .listRuns(limit, offset)
       .then((runs) => sendJson(response, 200, { runs }))
       .catch((error) => sendJson(response, 500, { error: error.message }));
     return true;
   }
 
-  if (url.pathname === "/api/stats/last-24h") {
-    monitor
+  if (context.includeOfficialStats && url.pathname === `${context.apiBasePath}/stats/last-24h`) {
+    context.monitor
       .getLast24HourOutcomeStats()
       .then((stats) => sendJson(response, 200, stats))
       .catch((error) => sendJson(response, 500, { error: error.message }));
     return true;
   }
 
-  if (url.pathname.startsWith("/api/runs/") && url.pathname.endsWith("/archive")) {
+  if (
+    url.pathname.startsWith(`${context.apiBasePath}/runs/`) &&
+    url.pathname.endsWith("/archive")
+  ) {
     const runId = decodeURIComponent(
-      url.pathname.replace("/api/runs/", "").replace(/\/archive$/, "")
+      url.pathname.replace(`${context.apiBasePath}/runs/`, "").replace(/\/archive$/, "")
     );
 
-    monitor
+    context.monitor
       .getRunArtifact(runId)
       .then(async (artifact) => {
         if (!artifact) {
@@ -127,9 +146,9 @@ function routeApi(request, response, url) {
     return true;
   }
 
-  if (url.pathname.startsWith("/api/runs/")) {
-    const runId = decodeURIComponent(url.pathname.replace("/api/runs/", ""));
-    monitor
+  if (url.pathname.startsWith(`${context.apiBasePath}/runs/`)) {
+    const runId = decodeURIComponent(url.pathname.replace(`${context.apiBasePath}/runs/`, ""));
+    context.monitor
       .loadRun(runId)
       .then((run) => {
         if (!run) {
@@ -143,7 +162,7 @@ function routeApi(request, response, url) {
     return true;
   }
 
-  if (url.pathname === "/api/stream") {
+  if (url.pathname === `${context.apiBasePath}/stream`) {
     response.writeHead(200, {
       "content-type": "text/event-stream; charset=utf-8",
       "cache-control": "no-cache, no-transform",
@@ -151,8 +170,8 @@ function routeApi(request, response, url) {
     });
 
     response.write("\n");
-    sseClients.add(response);
-    sendSseEvent(response, "state", monitor.getState());
+    context.sseClients.add(response);
+    sendSseEvent(response, "state", context.monitor.getState());
 
     const heartbeat = setInterval(() => {
       response.write(": keep-alive\n\n");
@@ -160,7 +179,7 @@ function routeApi(request, response, url) {
 
     request.on("close", () => {
       clearInterval(heartbeat);
-      sseClients.delete(response);
+      context.sseClients.delete(response);
     });
 
     return true;
@@ -169,22 +188,28 @@ function routeApi(request, response, url) {
   return false;
 }
 
-monitor.on("state", (state) => {
-  broadcast("state", state);
-});
+for (const context of monitorContexts) {
+  context.monitor.on("state", (state) => {
+    broadcast(context.sseClients, "state", state);
+  });
 
-monitor.on("feed-status", (status) => {
-  broadcast("feed-status", status);
-});
+  context.monitor.on("feed-status", (status) => {
+    broadcast(context.sseClients, "feed-status", status);
+  });
+}
 
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url || "/", `http://${request.headers.host}`);
 
   if (url.pathname.startsWith("/api/")) {
-    const handled = routeApi(request, response, url);
-    if (!handled) {
-      sendJson(response, 404, { error: "Not found" });
+    for (const context of monitorContexts) {
+      const handled = routeMonitorApi(request, response, url, context);
+      if (handled) {
+        return;
+      }
     }
+
+    sendJson(response, 404, { error: "Not found" });
     return;
   }
 
@@ -192,7 +217,7 @@ const server = http.createServer(async (request, response) => {
 });
 
 async function shutdown() {
-  await monitor.stop();
+  await Promise.all(monitorContexts.map((context) => context.monitor.stop()));
   server.closeAllConnections?.();
   server.close();
 }
@@ -200,7 +225,7 @@ async function shutdown() {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-await monitor.start();
+await Promise.all(monitorContexts.map((context) => context.monitor.start()));
 
 server.listen(config.port, config.host, () => {
   console.log(`Polymarket chart bot listening on http://${config.host}:${config.port}`);

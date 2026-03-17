@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>BTC 5m Polymarket Monitor</title>
+    <title>BTC 15m Polymarket Monitor</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
@@ -11,16 +11,14 @@
       <header class="hero">
         <div>
           <p class="eyebrow">Polymarket Recorder</p>
-          <h1>Bitcoin Up/Down 5-minute monitor</h1>
+          <h1>Bitcoin Up/Down 15-minute monitor</h1>
           <p class="hero-copy">
-            Continuous BTC 5-minute capture with one-chart-at-a-time playback in
+            Continuous BTC 15-minute capture with one-chart-at-a-time playback in
             the browser.
           </p>
         </div>
         <div class="hero-actions">
-          <a href="/15minutebtc" class="button" aria-label="Open 15-minute monitor">
-            View 15m
-          </a>
+          <a href="/" class="button" aria-label="Open 5-minute monitor">View 5m</a>
           <a href="/previousstats" class="button" aria-label="Open official outcome stats">
             View stats
           </a>
@@ -35,7 +33,7 @@
           <div class="panel-header">
             <div>
               <p class="panel-label">Chart</p>
-              <h2 id="chart-title">Waiting for market data</h2>
+              <h2 id="chart-title">Waiting for 15-minute market data</h2>
             </div>
             <div class="status-block">
               <span id="phase-badge" class="badge">idle</span>
@@ -152,18 +150,27 @@
               </div>
               <div>
                 <dt>Stored files</dt>
-                <dd id="data-path">data/runs/*.jsonl.gz + live .jsonl</dd>
+                <dd id="data-path">data/15minutebtc/runs/*.jsonl.gz + live .jsonl</dd>
               </div>
             </dl>
             <p class="panel-note">
               Every snapshot is written to disk as it arrives. Previous and next
-              buttons move through saved 5-minute iterations.
+              buttons move through saved 15-minute iterations.
             </p>
           </section>
         </aside>
       </main>
     </div>
 
+    <script>
+      window.MONITOR_CONFIG = {
+        apiBasePath: "/api/15minutebtc",
+        defaultDurationMinutes: 15,
+        storagePathLabel: "data/15minutebtc/runs/*.jsonl.gz + live .jsonl",
+        waitingChartTitle: "Waiting for 15-minute market data",
+        failedChartTitle: "Failed to load 15-minute monitor"
+      };
+    </script>
     <script type="module" src="/app.js"></script>
   </body>
-  </html>
+</html>

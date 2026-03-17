@@ -1,9 +1,14 @@
 import EventEmitter from "node:events";
 
+import path from "node:path";
+
 import { config } from "./config.js";
 import { isoNow } from "./lib/time.js";
 import { RunStore } from "./persistence/runStore.js";
-import { discoverBtcFiveMinuteMarkets } from "./polymarket/discovery.js";
+import {
+  discoverBtcFifteenMinuteMarkets,
+  discoverBtcFiveMinuteMarkets
+} from "./polymarket/discovery.js";
 import { PolymarketFeed } from "./polymarket/feed.js";
 import { fetchOfficialOutcomeStats } from "./polymarket/officialOutcomeStats.js";
 
@@ -15,9 +20,13 @@ function buildRunId(market) {
 }
 
 export class MonitorService extends EventEmitter {
-  constructor() {
+  constructor(options = {}) {
     super();
-    this.store = new RunStore();
+    this.family = options.family || "btc-5m";
+    this.discoverMarkets = options.discoverMarkets || discoverBtcFiveMinuteMarkets;
+    this.store = new RunStore({
+      dataDir: options.dataDir || config.dataDir
+    });
     this.feed = null;
     this.currentMarket = null;
     this.currentRun = null;
@@ -84,7 +93,7 @@ export class MonitorService extends EventEmitter {
       const now = Date.now();
       this.pruneSkippedMarkets(now);
 
-      const { current, next } = await discoverBtcFiveMinuteMarkets({ now });
+      const { current, next } = await this.discoverMarkets({ now });
       const selectedCurrent =
         current && !this.skippedMarketIds.has(current.id) ? current : null;
       const selectedNext = next && !this.skippedMarketIds.has(next.id) ? next : null;
@@ -280,4 +289,19 @@ export class MonitorService extends EventEmitter {
   async getLast24HourOutcomeStats() {
     return fetchOfficialOutcomeStats();
   }
+}
+
+export function createFiveMinuteMonitorService() {
+  return new MonitorService({
+    family: "btc-5m",
+    discoverMarkets: discoverBtcFiveMinuteMarkets
+  });
+}
+
+export function createFifteenMinuteMonitorService() {
+  return new MonitorService({
+    family: "btc-15m",
+    discoverMarkets: discoverBtcFifteenMinuteMarkets,
+    dataDir: path.join(config.dataDir, "15minutebtc")
+  });
 }

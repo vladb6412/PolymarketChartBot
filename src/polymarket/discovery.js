@@ -4,7 +4,6 @@ import { safeJsonParse } from "../lib/json.js";
 import { parseDate } from "../lib/time.js";
 
 const BTC_MARKET_PATTERN = /\bbitcoin up or down\b/i;
-const BTC_SLUG_PATTERN = /^btc-updown-5m-(\d+)$/i;
 const DEFAULT_LOOKBACK_MS = 10 * 60 * 1000;
 const DEFAULT_LOOKAHEAD_MS = 60 * 60 * 1000;
 
@@ -19,6 +18,31 @@ function marketText(rawMarket) {
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+function buildBtcSlugPattern(intervalMinutes) {
+  return new RegExp(`^btc-updown-${intervalMinutes}m-(\\d+)$`, "i");
+}
+
+function parseBtcMarketSlug(slug) {
+  const match = `${slug || ""}`.match(/^btc-updown-(\d+)m-(\d+)$/i);
+
+  if (!match) {
+    return null;
+  }
+
+  const intervalMinutes = Number(match[1]);
+  const startTimestamp = Number(match[2]) * 1_000;
+
+  if (!Number.isFinite(intervalMinutes) || !Number.isFinite(startTimestamp)) {
+    return null;
+  }
+
+  return {
+    intervalMinutes,
+    startTimestamp,
+    endTimestamp: startTimestamp + intervalMinutes * 60 * 1_000
+  };
 }
 
 export function normalizeOutcomeLabel(label, fallbackIndex) {
@@ -46,7 +70,7 @@ export function normalizeOutcomeLabel(label, fallbackIndex) {
 export function normalizeTrackedMarket(rawMarket) {
   const event = rawMarket.events?.[0] || null;
   const slug = rawMarket.slug || event?.slug || `${rawMarket.id}`;
-  const slugMatch = slug.match(BTC_SLUG_PATTERN);
+  const parsedSlug = parseBtcMarketSlug(slug);
   const outcomes = safeJsonParse(rawMarket.outcomes, []);
   const assetIds = safeJsonParse(rawMarket.clobTokenIds, []);
 
@@ -54,8 +78,8 @@ export function normalizeTrackedMarket(rawMarket) {
     return null;
   }
 
-  const derivedStartTimestamp = slugMatch ? Number(slugMatch[1]) * 1_000 : null;
-  const derivedEndTimestamp = derivedStartTimestamp !== null ? derivedStartTimestamp + 5 * 60 * 1_000 : null;
+  const derivedStartTimestamp = parsedSlug?.startTimestamp ?? null;
+  const derivedEndTimestamp = parsedSlug?.endTimestamp ?? null;
   const startDate =
     derivedStartTimestamp !== null
       ? new Date(derivedStartTimestamp).toISOString()
@@ -85,6 +109,11 @@ export function normalizeTrackedMarket(rawMarket) {
     startTimestamp:
       derivedStartTimestamp ?? parseDate(startDate)?.getTime() ?? null,
     endTimestamp: derivedEndTimestamp ?? parseDate(endDate)?.getTime() ?? null,
+    intervalMinutes:
+      parsedSlug?.intervalMinutes ??
+      (parseDate(startDate) && parseDate(endDate)
+        ? Math.round((parseDate(endDate).getTime() - parseDate(startDate).getTime()) / 60_000)
+        : null),
     acceptingOrders: Boolean(rawMarket.acceptingOrders),
     active: Boolean(rawMarket.active),
     closed: Boolean(rawMarket.closed),
@@ -92,9 +121,14 @@ export function normalizeTrackedMarket(rawMarket) {
   };
 }
 
-export function isBtcFiveMinuteMarket(rawMarket) {
+export function isBtcIntervalMarket(rawMarket, intervalMinutes) {
   const text = marketText(rawMarket);
   const slug = rawMarket.slug || rawMarket.events?.[0]?.slug || "";
+  const seriesSlug =
+    rawMarket.seriesSlug ||
+    rawMarket.events?.[0]?.seriesSlug ||
+    rawMarket.events?.[0]?.series?.[0]?.slug ||
+    "";
   const normalized = normalizeTrackedMarket(rawMarket);
 
   if (!normalized) {
@@ -102,10 +136,22 @@ export function isBtcFiveMinuteMarket(rawMarket) {
   }
 
   if (slug) {
-    return BTC_SLUG_PATTERN.test(slug);
+    return buildBtcSlugPattern(intervalMinutes).test(slug);
+  }
+
+  if (seriesSlug) {
+    return new RegExp(`btc-up-or-down-${intervalMinutes}m`, "i").test(seriesSlug);
   }
 
   return BTC_MARKET_PATTERN.test(text);
+}
+
+export function isBtcFiveMinuteMarket(rawMarket) {
+  return isBtcIntervalMarket(rawMarket, 5);
+}
+
+export function isBtcFifteenMinuteMarket(rawMarket) {
+  return isBtcIntervalMarket(rawMarket, 15);
 }
 
 export function selectRelevantMarket(candidates, now = Date.now()) {
@@ -124,7 +170,11 @@ export function selectRelevantMarket(candidates, now = Date.now()) {
   };
 }
 
-export async function fetchCandidateMarkets({ signal, now = Date.now() } = {}) {
+export async function fetchCandidateMarkets({
+  signal,
+  now = Date.now(),
+  intervalMinutes = 5
+} = {}) {
   const endMin = new Date(now - DEFAULT_LOOKBACK_MS).toISOString();
   const endMax = new Date(now + DEFAULT_LOOKAHEAD_MS).toISOString();
   const candidates = [];
@@ -148,7 +198,7 @@ export async function fetchCandidateMarkets({ signal, now = Date.now() } = {}) {
     }
 
     for (const market of page) {
-      if (!isBtcFiveMinuteMarket(market)) {
+      if (!isBtcIntervalMarket(market, intervalMinutes)) {
         continue;
       }
 
@@ -179,6 +229,11 @@ export async function fetchCandidateMarkets({ signal, now = Date.now() } = {}) {
 }
 
 export async function discoverBtcFiveMinuteMarkets({ signal, now = Date.now() } = {}) {
-  const candidates = await fetchCandidateMarkets({ signal, now });
+  const candidates = await fetchCandidateMarkets({ signal, now, intervalMinutes: 5 });
+  return selectRelevantMarket(candidates, now);
+}
+
+export async function discoverBtcFifteenMinuteMarkets({ signal, now = Date.now() } = {}) {
+  const candidates = await fetchCandidateMarkets({ signal, now, intervalMinutes: 15 });
   return selectRelevantMarket(candidates, now);
 }
