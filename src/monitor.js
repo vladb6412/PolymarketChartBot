@@ -144,19 +144,22 @@ export class MonitorService extends EventEmitter {
       await this.finishCurrentRun("rolled");
     }
 
-    const runSummary = await this.store.startRun({
-      id: buildRunId(market),
-      status: "live",
-      marketId: market.id,
-      conditionId: market.conditionId,
-      slug: market.slug,
-      eventTitle: market.eventTitle,
-      question: market.question,
-      startedAt: market.startDate,
-      recordingStartedAt: isoNow(),
-      endsAt: market.endDate,
-      outcomes: market.outcomes
-    });
+    const resumableRun = await this.store.findResumableRun(market);
+    const runSummary =
+      resumableRun ||
+      (await this.store.startRun({
+        id: buildRunId(market),
+        status: "live",
+        marketId: market.id,
+        conditionId: market.conditionId,
+        slug: market.slug,
+        eventTitle: market.eventTitle,
+        question: market.question,
+        startedAt: market.startDate,
+        recordingStartedAt: isoNow(),
+        endsAt: market.endDate,
+        outcomes: market.outcomes
+      }));
 
     this.currentMarket = market;
     this.currentRun = runSummary;

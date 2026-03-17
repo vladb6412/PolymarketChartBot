@@ -40,6 +40,7 @@ export class RunStore {
       this.index = await this.rebuildIndexFromFiles();
       await writeJsonFile(runIndexPath, this.index);
     }
+    await this.reconcileLiveRuns();
     this.ready = true;
     this.queueArchivedCompressionSweep();
   }
@@ -357,6 +358,108 @@ export class RunStore {
     return this.index.slice(start, start + limit);
   }
 
+  async reconcileLiveRuns(now = Date.now()) {
+    const liveGroups = new Map();
+
+    for (const summary of this.index.filter((entry) => entry.status === "live")) {
+      const key = `${summary.marketId || summary.slug}|${summary.startedAt}`;
+      const group = liveGroups.get(key) || [];
+      group.push(summary);
+      liveGroups.set(key, group);
+    }
+
+    for (const group of liveGroups.values()) {
+      group.sort(compareResumableRuns);
+
+      for (let index = 1; index < group.length; index += 1) {
+        await this.retireDuplicateLiveRun(group[index]);
+      }
+
+      const primary = group[0];
+      if (primary && new Date(primary.endsAt).getTime() <= now) {
+        await this.retireExpiredLiveRun(primary);
+      }
+    }
+  }
+
+  async retireDuplicateLiveRun(summary) {
+    if ((summary.pointCount || 0) === 0) {
+      await this.removeRun(summary.id);
+      return;
+    }
+
+    await this.finishRun(summary.id, {
+      status: "interrupted",
+      endedAt: summary.lastRecordedAt || isoNow()
+    });
+  }
+
+  async retireExpiredLiveRun(summary) {
+    if ((summary.pointCount || 0) === 0) {
+      await this.removeRun(summary.id);
+      return;
+    }
+
+    await this.finishRun(summary.id, {
+      status: "interrupted",
+      endedAt: summary.lastRecordedAt || summary.endsAt || isoNow()
+    });
+  }
+
+  async removeRun(runId) {
+    const summary = this.index.find((entry) => entry.id === runId);
+
+    if (!summary) {
+      return;
+    }
+
+    try {
+      const filePath = await this.resolveRunFilePath(runId, summary);
+      await fs.rm(filePath, { force: true });
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    this.index = this.index.filter((entry) => entry.id !== runId);
+    await writeJsonFile(runIndexPath, this.index);
+  }
+
+  async findResumableRun(market) {
+    if (!this.ready) {
+      await this.init();
+    }
+
+    const candidates = this.index
+      .filter(
+        (entry) =>
+          entry.status === "live" &&
+          entry.startedAt === market.startDate &&
+          (entry.marketId === market.id || entry.slug === market.slug)
+      )
+      .sort(compareResumableRuns);
+
+    for (const candidate of candidates) {
+      try {
+        const filePath = await this.resolveRunFilePath(candidate.id, candidate);
+        await fs.access(filePath);
+        return this.normalizeSummary({
+          ...candidate,
+          fileName: path.basename(filePath),
+          storageFormat:
+            getStorageFormatForFileName(path.basename(filePath)) || candidate.storageFormat
+        });
+      } catch (error) {
+        if (error.code !== "ENOENT") {
+          throw error;
+        }
+      }
+    }
+
+    return null;
+  }
+
   async readRunSummaryForRunId(runId) {
     const filePath = await this.resolveRunFilePath(runId);
 
@@ -437,4 +540,22 @@ export class RunStore {
     await Promise.allSettled(this.pendingCompression.values());
     await writeJsonFile(runIndexPath, this.index);
   }
+}
+
+function compareResumableRuns(left, right) {
+  return (
+    (right.pointCount || 0) - (left.pointCount || 0) ||
+    timestampOf(right.lastRecordedAt) - timestampOf(left.lastRecordedAt) ||
+    timestampOf(right.createdAt) - timestampOf(left.createdAt) ||
+    timestampOf(right.recordingStartedAt) - timestampOf(left.recordingStartedAt)
+  );
+}
+
+function timestampOf(value) {
+  if (!value) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
 }

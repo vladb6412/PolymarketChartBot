@@ -16,8 +16,10 @@ const { COMPRESSED_RUN_STORAGE_FORMAT } = await import(
 );
 
 const runsDirectory = path.join(tempDataDirectory, "runs");
+const stores = [];
 
 test.after(async () => {
+  await Promise.all(stores.map((store) => store.flush()));
   delete process.env.DATA_DIR;
   await fs.rm(tempDataDirectory, { recursive: true, force: true });
 });
@@ -51,6 +53,7 @@ function buildSnapshot(recordedAt, elapsedMs, upPrice, downPrice) {
 
 test("RunStore compresses completed runs and can still reload them", async () => {
   const store = new RunStore();
+  stores.push(store);
   await store.init();
 
   const run = await store.startRun({
@@ -100,10 +103,71 @@ test("RunStore compresses completed runs and can still reload them", async () =>
   assert.equal(artifact.storageFormat, COMPRESSED_RUN_STORAGE_FORMAT);
 
   const rebuiltStore = new RunStore();
+  stores.push(rebuiltStore);
   await rebuiltStore.init();
   const rebuilt = await rebuiltStore.loadRun(run.id);
 
   assert.equal(rebuilt.run.storageFormat, COMPRESSED_RUN_STORAGE_FORMAT);
   assert.equal(rebuilt.points.length, 2);
   assert.equal(rebuilt.points[0].prices.DOWN.displayedPrice, 0.46);
+});
+
+test("RunStore removes empty duplicate live runs and exposes the resumable run", async () => {
+  const store = new RunStore();
+  stores.push(store);
+  await store.init();
+
+  await store.startRun({
+    id: "resume-primary",
+    status: "live",
+    marketId: "market-resume",
+    conditionId: "condition-resume",
+    slug: "btc-updown-5m-resume",
+    eventTitle: "Bitcoin Up or Down - Resume Window",
+    question: "Bitcoin Up or Down - Resume Window",
+    startedAt: "2026-03-17T02:00:00.000Z",
+    recordingStartedAt: "2026-03-17T02:00:01.000Z",
+    endsAt: "2099-03-17T02:05:00.000Z",
+    outcomes: [
+      { key: "UP", label: "Up", assetId: "asset-up" },
+      { key: "DOWN", label: "Down", assetId: "asset-down" }
+    ]
+  });
+
+  await store.appendSnapshot(
+    "resume-primary",
+    buildSnapshot("2026-03-17T02:00:10.000Z", 10_000, 0.58, 0.42)
+  );
+
+  await store.startRun({
+    id: "resume-empty-duplicate",
+    status: "live",
+    marketId: "market-resume",
+    conditionId: "condition-resume",
+    slug: "btc-updown-5m-resume",
+    eventTitle: "Bitcoin Up or Down - Resume Window",
+    question: "Bitcoin Up or Down - Resume Window",
+    startedAt: "2026-03-17T02:00:00.000Z",
+    recordingStartedAt: "2026-03-17T02:00:03.000Z",
+    endsAt: "2099-03-17T02:05:00.000Z",
+    outcomes: [
+      { key: "UP", label: "Up", assetId: "asset-up" },
+      { key: "DOWN", label: "Down", assetId: "asset-down" }
+    ]
+  });
+
+  await store.reconcileLiveRuns();
+
+  const resumable = await store.findResumableRun({
+    id: "market-resume",
+    slug: "btc-updown-5m-resume",
+    startDate: "2026-03-17T02:00:00.000Z"
+  });
+  const listedRuns = await store.listRuns(10);
+  const runFiles = await fs.readdir(runsDirectory);
+
+  assert.equal(resumable.id, "resume-primary");
+  assert.equal(listedRuns.filter((entry) => entry.status === "live").length, 1);
+  assert.equal(runFiles.includes("resume-empty-duplicate.jsonl"), false);
+  assert.equal(runFiles.includes("resume-primary.jsonl"), true);
 });
