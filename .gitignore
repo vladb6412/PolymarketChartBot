@@ -1,0 +1,6 @@
+node_modules/
+data/*.json
+data/*.jsonl
+data/logs/*.log
+data/runs/*.jsonl
+data/runs/*.json
