@@ -24,6 +24,7 @@ export class MonitorService extends EventEmitter {
     super();
     this.family = options.family || "btc-5m";
     this.discoverMarkets = options.discoverMarkets || discoverBtcFiveMinuteMarkets;
+    this.purgeRunIds = [...(options.purgeRunIds || [])];
     this.store = new RunStore({
       dataDir: options.dataDir || config.dataDir
     });
@@ -43,6 +44,7 @@ export class MonitorService extends EventEmitter {
 
   async start() {
     await this.store.init();
+    await this.purgeConfiguredRuns();
     this.phase = "discovering";
     this.emitState();
     await this.refreshMarket();
@@ -289,6 +291,16 @@ export class MonitorService extends EventEmitter {
   async getLast24HourOutcomeStats() {
     return fetchOfficialOutcomeStats();
   }
+
+  async purgeConfiguredRuns() {
+    if (this.purgeRunIds.length === 0) {
+      return;
+    }
+
+    for (const runId of this.purgeRunIds) {
+      await this.store.removeRun(runId);
+    }
+  }
 }
 
 export function createFiveMinuteMonitorService() {
@@ -302,6 +314,7 @@ export function createFifteenMinuteMonitorService() {
   return new MonitorService({
     family: "btc-15m",
     discoverMarkets: discoverBtcFifteenMinuteMarkets,
-    dataDir: path.join(config.dataDir, "15minutebtc")
+    dataDir: path.join(config.dataDir, "15minutebtc"),
+    purgeRunIds: ["btc-updown-15m-1773761400-1773761400000-1773762224359"]
   });
 }
