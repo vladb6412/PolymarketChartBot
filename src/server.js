@@ -19,7 +19,7 @@ const fifteenMinuteContext = {
   apiBasePath: "/api/15minutebtc",
   monitor: createFifteenMinuteMonitorService(),
   sseClients: new Set(),
-  includeOfficialStats: false
+  includeOfficialStats: true
 };
 const monitorContexts = [fifteenMinuteContext, fiveMinuteContext];
 

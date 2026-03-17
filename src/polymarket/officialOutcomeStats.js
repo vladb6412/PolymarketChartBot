@@ -7,53 +7,57 @@ import {
   normalizeTrackedMarket
 } from "./discovery.js";
 
-const DEFAULT_WINDOWS = [24, 24 * 7];
+const DEFAULT_WINDOWS = [24, 24 * 3];
 const DEFAULT_CACHE_TTL_MS = 5 * 60_000;
-const FIVE_MINUTES_MS = 5 * 60 * 1_000;
 const DEFAULT_SLUG_BATCH_SIZE = 100;
 const DEFAULT_FETCH_CONCURRENCY = 4;
 
-let cachedOfficialStats = null;
-let inFlightOfficialStats = null;
+const cachedOfficialStats = new Map();
+const inFlightOfficialStats = new Map();
 
 export async function fetchOfficialOutcomeStats({
+  intervalMinutes = 5,
   now = Date.now(),
   useCache = true
 } = {}) {
+  const cacheKey = `${intervalMinutes}`;
+  const cachedEntry = cachedOfficialStats.get(cacheKey) || null;
   const shouldUseCache =
     useCache &&
-    cachedOfficialStats &&
-    Date.now() - cachedOfficialStats.cachedAt < DEFAULT_CACHE_TTL_MS;
+    cachedEntry &&
+    Date.now() - cachedEntry.cachedAt < DEFAULT_CACHE_TTL_MS;
 
   if (shouldUseCache) {
-    return cachedOfficialStats.payload;
+    return cachedEntry.payload;
   }
 
-  if (inFlightOfficialStats) {
-    return inFlightOfficialStats;
+  const inFlightTask = inFlightOfficialStats.get(cacheKey) || null;
+  if (inFlightTask) {
+    return inFlightTask;
   }
 
-  const task = loadOfficialOutcomeStats({ now })
+  const task = loadOfficialOutcomeStats({ intervalMinutes, now })
     .then((payload) => {
-      cachedOfficialStats = {
+      cachedOfficialStats.set(cacheKey, {
         cachedAt: Date.now(),
         payload
-      };
+      });
       return payload;
     })
     .finally(() => {
-      inFlightOfficialStats = null;
+      inFlightOfficialStats.delete(cacheKey);
     });
 
-  inFlightOfficialStats = task;
+  inFlightOfficialStats.set(cacheKey, task);
   return task;
 }
 
-async function loadOfficialOutcomeStats({ now }) {
+async function loadOfficialOutcomeStats({ intervalMinutes, now }) {
   const longestWindowHours = Math.max(...DEFAULT_WINDOWS);
   const markets = [];
   const seenMarketIds = new Set();
   const slugBatches = buildOfficialOutcomeSlugBatches({
+    intervalMinutes,
     now,
     hours: longestWindowHours
   });
@@ -72,13 +76,14 @@ async function loadOfficialOutcomeStats({ now }) {
   return {
     asOf: new Date(now).toISOString(),
     source: "polymarket_official",
+    intervalMinutes,
     windows: {
       last24Hours: buildLast24HourOutcomeStats(markets, {
         hours: 24,
         now
       }),
-      last7Days: buildLast24HourOutcomeStats(markets, {
-        hours: 24 * 7,
+      last3Days: buildLast24HourOutcomeStats(markets, {
+        hours: 24 * 3,
         now
       })
     }
@@ -86,13 +91,15 @@ async function loadOfficialOutcomeStats({ now }) {
 }
 
 export function buildOfficialOutcomeSlugBatches({
+  intervalMinutes = 5,
   now = Date.now(),
   hours = Math.max(...DEFAULT_WINDOWS),
   batchSize = DEFAULT_SLUG_BATCH_SIZE
 } = {}) {
+  const intervalMs = intervalMinutes * 60 * 1_000;
   const cutoffTimestamp = now - hours * 60 * 60 * 1_000;
-  const earliestStartTimestamp = floorToFiveMinutes(cutoffTimestamp) - FIVE_MINUTES_MS;
-  const latestStartTimestamp = floorToFiveMinutes(now) - FIVE_MINUTES_MS;
+  const earliestStartTimestamp = floorToInterval(cutoffTimestamp, intervalMs) - intervalMs;
+  const latestStartTimestamp = floorToInterval(now, intervalMs) - intervalMs;
 
   if (latestStartTimestamp < earliestStartTimestamp) {
     return [];
@@ -103,9 +110,9 @@ export function buildOfficialOutcomeSlugBatches({
   for (
     let startTimestamp = earliestStartTimestamp;
     startTimestamp <= latestStartTimestamp;
-    startTimestamp += FIVE_MINUTES_MS
+    startTimestamp += intervalMs
   ) {
-    slugs.push(`btc-updown-5m-${Math.floor(startTimestamp / 1_000)}`);
+    slugs.push(`btc-updown-${intervalMinutes}m-${Math.floor(startTimestamp / 1_000)}`);
   }
 
   const batches = [];
@@ -194,6 +201,6 @@ async function fetchOfficialMarketsBySlugs(slugs) {
   return Array.isArray(page) ? page : [];
 }
 
-function floorToFiveMinutes(timestamp) {
-  return Math.floor(timestamp / FIVE_MINUTES_MS) * FIVE_MINUTES_MS;
+function floorToInterval(timestamp, intervalMs) {
+  return Math.floor(timestamp / intervalMs) * intervalMs;
 }

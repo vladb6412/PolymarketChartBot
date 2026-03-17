@@ -59,19 +59,34 @@ test("normalizeOfficialClosedOutcomeMarket ignores markets that are not official
 test("buildOfficialOutcomeSlugBatches covers the full 7 day window in exact five minute increments", () => {
   const batches = buildOfficialOutcomeSlugBatches({
     now: new Date("2026-03-17T05:12:00.000Z").getTime(),
-    hours: 24 * 7,
+    hours: 24 * 3,
     batchSize: 100
   });
   const slugs = batches.flat();
 
-  assert.equal(batches.length, 21);
-  assert.equal(slugs.length, 2017);
-  assert.equal(slugs[0], "btc-updown-5m-1773119100");
+  assert.equal(batches.length, 9);
+  assert.equal(slugs.length, 865);
+  assert.equal(slugs[0], "btc-updown-5m-1773464700");
   assert.equal(slugs.at(-1), "btc-updown-5m-1773723900");
   assert.ok(batches.every((batch) => batch.length <= 100));
 });
 
-test("official stats payload can support 24 hour and 7 day windows from the same market list", () => {
+test("buildOfficialOutcomeSlugBatches supports the 15 minute family", () => {
+  const batches = buildOfficialOutcomeSlugBatches({
+    intervalMinutes: 15,
+    now: new Date("2026-03-17T05:12:00.000Z").getTime(),
+    hours: 24,
+    batchSize: 100
+  });
+  const slugs = batches.flat();
+
+  assert.equal(batches.length, 1);
+  assert.equal(slugs.length, 97);
+  assert.equal(slugs[0], "btc-updown-15m-1773636300");
+  assert.equal(slugs.at(-1), "btc-updown-15m-1773722700");
+});
+
+test("official stats payload can support 24 hour and 3 day windows from the same market list", () => {
   const markets = [
     {
       id: "m1",
@@ -89,8 +104,8 @@ test("official stats payload can support 24 hour and 7 day windows from the same
     },
     {
       id: "m3",
-      startedAt: "2026-03-11T00:00:00.000Z",
-      endsAt: "2026-03-11T00:05:00.000Z",
+      startedAt: "2026-03-14T00:10:00.000Z",
+      endsAt: "2026-03-14T00:15:00.000Z",
       outcomeKey: "DOWN",
       source: "polymarket_official"
     }
@@ -100,14 +115,14 @@ test("official stats payload can support 24 hour and 7 day windows from the same
     hours: 24,
     now: new Date("2026-03-17T00:10:00.000Z").getTime()
   });
-  const last7Days = buildLast24HourOutcomeStats(markets, {
-    hours: 24 * 7,
+  const last3Days = buildLast24HourOutcomeStats(markets, {
+    hours: 24 * 3,
     now: new Date("2026-03-17T00:10:00.000Z").getTime()
   });
 
   assert.equal(last24Hours.concludedRuns, 2);
   assert.equal(last24Hours.upCount, 1);
   assert.equal(last24Hours.downCount, 1);
-  assert.equal(last7Days.concludedRuns, 3);
-  assert.equal(last7Days.downCount, 2);
+  assert.equal(last3Days.concludedRuns, 3);
+  assert.equal(last3Days.downCount, 2);
 });

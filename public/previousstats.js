@@ -1,15 +1,37 @@
-const elements = {
-  refreshButton: document.querySelector("#refresh-stats-button"),
-  stats24hUpCount: document.querySelector("#stats-24h-up-count"),
-  stats24hDownCount: document.querySelector("#stats-24h-down-count"),
-  stats24hMaxUpStreak: document.querySelector("#stats-24h-max-up-streak"),
-  stats24hMaxDownStreak: document.querySelector("#stats-24h-max-down-streak"),
-  stats7dUpCount: document.querySelector("#stats-7d-up-count"),
-  stats7dDownCount: document.querySelector("#stats-7d-down-count"),
-  stats7dMaxUpStreak: document.querySelector("#stats-7d-max-up-streak"),
-  stats7dMaxDownStreak: document.querySelector("#stats-7d-max-down-streak"),
-  statsSummaryNote: document.querySelector("#stats-summary-note")
-};
+const statsViews = [
+  {
+    label: "BTC 5-minute",
+    endpoint: "/api/stats/last-24h",
+    elements: {
+      summaryNote: document.querySelector("#stats-5m-summary-note"),
+      stats24hUpCount: document.querySelector("#stats-5m-24h-up-count"),
+      stats24hDownCount: document.querySelector("#stats-5m-24h-down-count"),
+      stats24hMaxUpStreak: document.querySelector("#stats-5m-24h-max-up-streak"),
+      stats24hMaxDownStreak: document.querySelector("#stats-5m-24h-max-down-streak"),
+      stats3dUpCount: document.querySelector("#stats-5m-3d-up-count"),
+      stats3dDownCount: document.querySelector("#stats-5m-3d-down-count"),
+      stats3dMaxUpStreak: document.querySelector("#stats-5m-3d-max-up-streak"),
+      stats3dMaxDownStreak: document.querySelector("#stats-5m-3d-max-down-streak")
+    }
+  },
+  {
+    label: "BTC 15-minute",
+    endpoint: "/api/15minutebtc/stats/last-24h",
+    elements: {
+      summaryNote: document.querySelector("#stats-15m-summary-note"),
+      stats24hUpCount: document.querySelector("#stats-15m-24h-up-count"),
+      stats24hDownCount: document.querySelector("#stats-15m-24h-down-count"),
+      stats24hMaxUpStreak: document.querySelector("#stats-15m-24h-max-up-streak"),
+      stats24hMaxDownStreak: document.querySelector("#stats-15m-24h-max-down-streak"),
+      stats3dUpCount: document.querySelector("#stats-15m-3d-up-count"),
+      stats3dDownCount: document.querySelector("#stats-15m-3d-down-count"),
+      stats3dMaxUpStreak: document.querySelector("#stats-15m-3d-max-up-streak"),
+      stats3dMaxDownStreak: document.querySelector("#stats-15m-3d-max-down-streak")
+    }
+  }
+];
+
+const refreshButton = document.querySelector("#refresh-stats-button");
 
 async function fetchJson(url) {
   const response = await fetch(url, {
@@ -25,45 +47,59 @@ async function fetchJson(url) {
   return response.json();
 }
 
-function renderStats(stats) {
+function renderStats(view, stats) {
   const stats24h = stats?.windows?.last24Hours || null;
-  const stats7d = stats?.windows?.last7Days || null;
+  const stats3d = stats?.windows?.last3Days || null;
+  const { elements } = view;
 
   elements.stats24hUpCount.textContent = `${stats24h?.upCount ?? "-"}`;
   elements.stats24hDownCount.textContent = `${stats24h?.downCount ?? "-"}`;
   elements.stats24hMaxUpStreak.textContent = `${stats24h?.maxConsecutiveUp ?? "-"}`;
   elements.stats24hMaxDownStreak.textContent = `${stats24h?.maxConsecutiveDown ?? "-"}`;
-  elements.stats7dUpCount.textContent = `${stats7d?.upCount ?? "-"}`;
-  elements.stats7dDownCount.textContent = `${stats7d?.downCount ?? "-"}`;
-  elements.stats7dMaxUpStreak.textContent = `${stats7d?.maxConsecutiveUp ?? "-"}`;
-  elements.stats7dMaxDownStreak.textContent = `${stats7d?.maxConsecutiveDown ?? "-"}`;
+  elements.stats3dUpCount.textContent = `${stats3d?.upCount ?? "-"}`;
+  elements.stats3dDownCount.textContent = `${stats3d?.downCount ?? "-"}`;
+  elements.stats3dMaxUpStreak.textContent = `${stats3d?.maxConsecutiveUp ?? "-"}`;
+  elements.stats3dMaxDownStreak.textContent = `${stats3d?.maxConsecutiveDown ?? "-"}`;
 
   if (!stats) {
-    elements.statsSummaryNote.textContent = "Loading official Polymarket outcome summaries.";
+    elements.summaryNote.textContent = `Loading ${view.label} official outcome summaries.`;
     return;
   }
 
-  elements.statsSummaryNote.textContent = `Official Polymarket closed outcomes. Counted runs: ${
+  elements.summaryNote.textContent = `${view.label} official Polymarket closed outcomes. Counted runs: ${
     stats24h?.concludedRuns ?? "-"
-  } in the last 24 hours, ${stats7d?.concludedRuns ?? "-"} in the last 7 days.`;
+  } in the last 24 hours, ${stats3d?.concludedRuns ?? "-"} in the last 3 days.`;
 }
 
 async function refreshStats() {
-  elements.refreshButton.disabled = true;
-  elements.statsSummaryNote.textContent = "Refreshing official Polymarket outcome summaries.";
+  refreshButton.disabled = true;
 
-  try {
-    const stats = await fetchJson("/api/stats/last-24h");
-    renderStats(stats);
-  } catch (error) {
-    console.error(error);
-    elements.statsSummaryNote.textContent = `Failed to load official Polymarket outcomes: ${error.message}`;
-  } finally {
-    elements.refreshButton.disabled = false;
+  for (const view of statsViews) {
+    view.elements.summaryNote.textContent = `Refreshing ${view.label} official outcome summaries.`;
   }
+
+  const results = await Promise.allSettled(
+    statsViews.map((view) => fetchJson(view.endpoint))
+  );
+
+  results.forEach((result, index) => {
+    const view = statsViews[index];
+
+    if (result.status === "fulfilled") {
+      renderStats(view, result.value);
+      return;
+    }
+
+    console.error(result.reason);
+    view.elements.summaryNote.textContent = `Failed to load ${view.label} official outcomes: ${
+      result.reason?.message || "Unknown error"
+    }`;
+  });
+
+  refreshButton.disabled = false;
 }
 
-elements.refreshButton.addEventListener("click", () => {
+refreshButton.addEventListener("click", () => {
   refreshStats().catch(console.error);
 });
 
