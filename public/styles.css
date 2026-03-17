@@ -31,6 +31,10 @@ body {
   padding: 32px 20px 40px;
 }
 
+.shell-narrow {
+  max-width: 1080px;
+}
+
 .hero {
   display: flex;
   justify-content: space-between;
@@ -78,6 +82,9 @@ h2 {
 }
 
 .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--panel-border);
   background: rgba(255, 250, 241, 0.75);
   border-radius: 999px;
@@ -85,6 +92,7 @@ h2 {
   font: 700 0.92rem/1 "IBM Plex Mono", "SFMono-Regular", monospace;
   color: var(--ink);
   cursor: pointer;
+  text-decoration: none;
   transition: transform 150ms ease, background 150ms ease;
 }
 
@@ -101,6 +109,11 @@ h2 {
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(310px, 0.95fr);
+  gap: 20px;
+}
+
+.page-stack {
+  display: grid;
   gap: 20px;
 }
 

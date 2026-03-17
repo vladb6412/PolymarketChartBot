@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BTC 5m Official Outcome Stats</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell shell-narrow">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Official outcomes</p>
+          <h1>Bitcoin Up/Down historical summary</h1>
+          <p class="hero-copy">
+            Official Polymarket closed outcomes for the BTC 5-minute market family.
+          </p>
+        </div>
+        <div class="hero-actions">
+          <a href="/" class="button" aria-label="Return to live monitor">Back to monitor</a>
+          <button id="refresh-stats-button" class="button button-primary" type="button">
+            Refresh stats
+          </button>
+        </div>
+      </header>
+
+      <main class="page-stack">
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-label">Official outcomes</p>
+              <h2>Outcome summary</h2>
+            </div>
+          </div>
+          <div class="stats-stack">
+            <section class="stats-window">
+              <p class="stats-window-label">Last 24 hours</p>
+              <dl class="metrics">
+                <div>
+                  <dt>Concluded UP</dt>
+                  <dd id="stats-24h-up-count">-</dd>
+                </div>
+                <div>
+                  <dt>Concluded DOWN</dt>
+                  <dd id="stats-24h-down-count">-</dd>
+                </div>
+                <div>
+                  <dt>Max consecutive UP</dt>
+                  <dd id="stats-24h-max-up-streak">-</dd>
+                </div>
+                <div>
+                  <dt>Max consecutive DOWN</dt>
+                  <dd id="stats-24h-max-down-streak">-</dd>
+                </div>
+              </dl>
+            </section>
+            <section class="stats-window">
+              <p class="stats-window-label">Last 7 days</p>
+              <dl class="metrics">
+                <div>
+                  <dt>Concluded UP</dt>
+                  <dd id="stats-7d-up-count">-</dd>
+                </div>
+                <div>
+                  <dt>Concluded DOWN</dt>
+                  <dd id="stats-7d-down-count">-</dd>
+                </div>
+                <div>
+                  <dt>Max consecutive UP</dt>
+                  <dd id="stats-7d-max-up-streak">-</dd>
+                </div>
+                <div>
+                  <dt>Max consecutive DOWN</dt>
+                  <dd id="stats-7d-max-down-streak">-</dd>
+                </div>
+              </dl>
+            </section>
+          </div>
+          <p id="stats-summary-note" class="panel-note">
+            Loading official Polymarket outcome summaries.
+          </p>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="/previousstats.js"></script>
+  </body>
+</html>

@@ -2,7 +2,6 @@ const state = {
   axisMode: "elapsed",
   followLive: true,
   liveState: null,
-  last24HourStats: null,
   runCatalog: [],
   selectedRunId: null,
   selectedRun: null,
@@ -28,15 +27,6 @@ const elements = {
   marketRecording: document.querySelector("#market-recording"),
   marketPoints: document.querySelector("#market-points"),
   nextMarketWindow: document.querySelector("#next-market-window"),
-  stats24hUpCount: document.querySelector("#stats-24h-up-count"),
-  stats24hDownCount: document.querySelector("#stats-24h-down-count"),
-  stats24hMaxUpStreak: document.querySelector("#stats-24h-max-up-streak"),
-  stats24hMaxDownStreak: document.querySelector("#stats-24h-max-down-streak"),
-  stats7dUpCount: document.querySelector("#stats-7d-up-count"),
-  stats7dDownCount: document.querySelector("#stats-7d-down-count"),
-  stats7dMaxUpStreak: document.querySelector("#stats-7d-max-up-streak"),
-  stats7dMaxDownStreak: document.querySelector("#stats-7d-max-down-streak"),
-  statsSummaryNote: document.querySelector("#stats-summary-note"),
   savedRuns: document.querySelector("#saved-runs"),
   selectedRunIdLabel: document.querySelector("#selected-run-id"),
   dataPath: document.querySelector("#data-path"),
@@ -130,10 +120,6 @@ function mergeRunCatalog(runs) {
 async function refreshRunCatalog(limit = 500) {
   const payload = await fetchJson(`/api/runs?limit=${limit}`);
   mergeRunCatalog(payload.runs);
-}
-
-async function refreshLast24HourStats() {
-  state.last24HourStats = await fetchJson("/api/stats/last-24h");
 }
 
 function getSelectedRunIndex() {
@@ -430,30 +416,6 @@ function renderNavigation() {
   elements.nextRunButton.disabled = selectedIndex <= 0;
 }
 
-function renderLast24HourStats() {
-  const stats = state.last24HourStats;
-  const stats24h = stats?.windows?.last24Hours || null;
-  const stats7d = stats?.windows?.last7Days || null;
-
-  elements.stats24hUpCount.textContent = `${stats24h?.upCount ?? "-"}`;
-  elements.stats24hDownCount.textContent = `${stats24h?.downCount ?? "-"}`;
-  elements.stats24hMaxUpStreak.textContent = `${stats24h?.maxConsecutiveUp ?? "-"}`;
-  elements.stats24hMaxDownStreak.textContent = `${stats24h?.maxConsecutiveDown ?? "-"}`;
-  elements.stats7dUpCount.textContent = `${stats7d?.upCount ?? "-"}`;
-  elements.stats7dDownCount.textContent = `${stats7d?.downCount ?? "-"}`;
-  elements.stats7dMaxUpStreak.textContent = `${stats7d?.maxConsecutiveUp ?? "-"}`;
-  elements.stats7dMaxDownStreak.textContent = `${stats7d?.maxConsecutiveDown ?? "-"}`;
-
-  if (!stats) {
-    elements.statsSummaryNote.textContent = "Loading official Polymarket outcome summaries.";
-    return;
-  }
-
-  elements.statsSummaryNote.textContent = `Official Polymarket closed outcomes. Counted runs: ${
-    stats24h?.concludedRuns ?? "-"
-  } in the last 24 hours, ${stats7d?.concludedRuns ?? "-"} in the last 7 days.`;
-}
-
 function render() {
   syncSelectedRunSummary();
 
@@ -496,7 +458,6 @@ function render() {
   renderCurrentPriceCard(prices[outcomes[0]?.key], elements.upPrice, elements.upDetail);
   renderCurrentPriceCard(prices[outcomes[1]?.key], elements.downPrice, elements.downDetail);
   renderNavigation();
-  renderLast24HourStats();
   drawChart(runDetail);
 }
 
@@ -525,20 +486,14 @@ async function initialize() {
   mergeRunCatalog(liveState.recentRuns || []);
   ensureSelectedRun();
   render();
-  refreshLast24HourStats().then(render).catch(console.error);
 
   const stream = new EventSource("/api/stream");
   stream.addEventListener("state", (event) => {
-    const previousRunId = state.liveState?.currentRun?.id || null;
     state.liveState = JSON.parse(event.data);
     mergeRunCatalog(state.liveState.recentRuns || []);
     appendLiveSnapshotIfNeeded();
     ensureSelectedRun();
     render();
-
-    if (previousRunId !== state.liveState?.currentRun?.id) {
-      refreshLast24HourStats().then(render).catch(console.error);
-    }
   });
 
   setInterval(() => {
@@ -546,10 +501,6 @@ async function initialize() {
       .then(() => render())
       .catch(console.error);
   }, 60_000);
-
-  setInterval(() => {
-    refreshLast24HourStats().then(render).catch(console.error);
-  }, 5 * 60_000);
 }
 
 elements.axisToggleButton.addEventListener("click", () => {

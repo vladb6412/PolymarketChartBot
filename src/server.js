@@ -38,7 +38,14 @@ function broadcast(event, payload) {
 }
 
 async function serveStatic(requestPath, response) {
-  const safePath = requestPath === "/" ? "/index.html" : requestPath;
+  let safePath = requestPath;
+
+  if (requestPath === "/") {
+    safePath = "/index.html";
+  } else if (requestPath === "/previousstats") {
+    safePath = "/previousstats.html";
+  }
+
   const targetPath = path.join(publicDirectory, safePath);
   const normalizedPublic = `${publicDirectory}${path.sep}`;
   const normalizedTarget = path.normalize(targetPath);
