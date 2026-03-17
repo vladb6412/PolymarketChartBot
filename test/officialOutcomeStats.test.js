@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildLast24HourOutcomeStats } from "../src/domain/outcomeStats.js";
-import { normalizeOfficialClosedOutcomeMarket } from "../src/polymarket/officialOutcomeStats.js";
+import {
+  buildOfficialOutcomeSlugBatches,
+  normalizeOfficialClosedOutcomeMarket
+} from "../src/polymarket/officialOutcomeStats.js";
 
 const rawClosedMarket = {
   id: "1603800",
@@ -41,6 +44,31 @@ test("normalizeOfficialClosedOutcomeMarket ignores tied official outcomes", () =
     }),
     null
   );
+});
+
+test("normalizeOfficialClosedOutcomeMarket ignores markets that are not officially closed yet", () => {
+  assert.equal(
+    normalizeOfficialClosedOutcomeMarket({
+      ...rawClosedMarket,
+      closed: false
+    }),
+    null
+  );
+});
+
+test("buildOfficialOutcomeSlugBatches covers the full 7 day window in exact five minute increments", () => {
+  const batches = buildOfficialOutcomeSlugBatches({
+    now: new Date("2026-03-17T05:12:00.000Z").getTime(),
+    hours: 24 * 7,
+    batchSize: 100
+  });
+  const slugs = batches.flat();
+
+  assert.equal(batches.length, 21);
+  assert.equal(slugs.length, 2017);
+  assert.equal(slugs[0], "btc-updown-5m-1773119100");
+  assert.equal(slugs.at(-1), "btc-updown-5m-1773723900");
+  assert.ok(batches.every((batch) => batch.length <= 100));
 });
 
 test("official stats payload can support 24 hour and 7 day windows from the same market list", () => {

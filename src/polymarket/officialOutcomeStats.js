@@ -3,15 +3,15 @@ import { fetchJson } from "../lib/http.js";
 import { safeJsonParse } from "../lib/json.js";
 import { config } from "../config.js";
 import {
-  isBtcFiveMinuteMarket,
   normalizeOutcomeLabel,
   normalizeTrackedMarket
 } from "./discovery.js";
 
 const DEFAULT_WINDOWS = [24, 24 * 7];
 const DEFAULT_CACHE_TTL_MS = 60_000;
-const DEFAULT_PAGE_SIZE = 500;
-const DEFAULT_MAX_PAGES = 20;
+const FIVE_MINUTES_MS = 5 * 60 * 1_000;
+const DEFAULT_SLUG_BATCH_SIZE = 100;
+const DEFAULT_FETCH_CONCURRENCY = 4;
 
 let cachedOfficialStats = null;
 let inFlightOfficialStats = null;
@@ -51,46 +51,22 @@ export async function fetchOfficialOutcomeStats({
 
 async function loadOfficialOutcomeStats({ now }) {
   const longestWindowHours = Math.max(...DEFAULT_WINDOWS);
-  const cutoffIso = new Date(now - longestWindowHours * 60 * 60 * 1000).toISOString();
-  const nowIso = new Date(now).toISOString();
   const markets = [];
   const seenMarketIds = new Set();
+  const slugBatches = buildOfficialOutcomeSlugBatches({
+    now,
+    hours: longestWindowHours
+  });
+  const rawMarkets = await fetchOfficialMarketsBySlugBatches(slugBatches);
 
-  for (let pageIndex = 0; pageIndex < DEFAULT_MAX_PAGES; pageIndex += 1) {
-    const params = new URLSearchParams({
-      closed: "true",
-      limit: `${DEFAULT_PAGE_SIZE}`,
-      offset: `${pageIndex * DEFAULT_PAGE_SIZE}`,
-      order: "endDate",
-      ascending: "false",
-      end_date_min: cutoffIso,
-      end_date_max: nowIso
-    });
-
-    const url = `${config.gammaBaseUrl}/markets?${params.toString()}`;
-    const page = await fetchJson(url);
-
-    if (!Array.isArray(page) || page.length === 0) {
-      break;
+  for (const rawMarket of rawMarkets) {
+    const normalizedMarket = normalizeOfficialClosedOutcomeMarket(rawMarket);
+    if (!normalizedMarket || seenMarketIds.has(normalizedMarket.id)) {
+      continue;
     }
 
-    for (const rawMarket of page) {
-      if (!isBtcFiveMinuteMarket(rawMarket)) {
-        continue;
-      }
-
-      const normalizedMarket = normalizeOfficialClosedOutcomeMarket(rawMarket);
-      if (!normalizedMarket || seenMarketIds.has(normalizedMarket.id)) {
-        continue;
-      }
-
-      seenMarketIds.add(normalizedMarket.id);
-      markets.push(normalizedMarket);
-    }
-
-    if (page.length < DEFAULT_PAGE_SIZE) {
-      break;
-    }
+    seenMarketIds.add(normalizedMarket.id);
+    markets.push(normalizedMarket);
   }
 
   return {
@@ -109,7 +85,43 @@ async function loadOfficialOutcomeStats({ now }) {
   };
 }
 
+export function buildOfficialOutcomeSlugBatches({
+  now = Date.now(),
+  hours = Math.max(...DEFAULT_WINDOWS),
+  batchSize = DEFAULT_SLUG_BATCH_SIZE
+} = {}) {
+  const cutoffTimestamp = now - hours * 60 * 60 * 1_000;
+  const earliestStartTimestamp = floorToFiveMinutes(cutoffTimestamp) - FIVE_MINUTES_MS;
+  const latestStartTimestamp = floorToFiveMinutes(now) - FIVE_MINUTES_MS;
+
+  if (latestStartTimestamp < earliestStartTimestamp) {
+    return [];
+  }
+
+  const slugs = [];
+
+  for (
+    let startTimestamp = earliestStartTimestamp;
+    startTimestamp <= latestStartTimestamp;
+    startTimestamp += FIVE_MINUTES_MS
+  ) {
+    slugs.push(`btc-updown-5m-${Math.floor(startTimestamp / 1_000)}`);
+  }
+
+  const batches = [];
+
+  for (let index = 0; index < slugs.length; index += batchSize) {
+    batches.push(slugs.slice(index, index + batchSize));
+  }
+
+  return batches;
+}
+
 export function normalizeOfficialClosedOutcomeMarket(rawMarket) {
+  if (!rawMarket?.closed) {
+    return null;
+  }
+
   const normalized = normalizeTrackedMarket(rawMarket);
 
   if (!normalized) {
@@ -146,4 +158,42 @@ export function normalizeOfficialClosedOutcomeMarket(rawMarket) {
     outcomeKey: rankedOutcomes[0].key,
     source: "polymarket_official"
   };
+}
+
+async function fetchOfficialMarketsBySlugBatches(slugBatches) {
+  const pages = [];
+
+  for (let index = 0; index < slugBatches.length; index += DEFAULT_FETCH_CONCURRENCY) {
+    const group = slugBatches.slice(index, index + DEFAULT_FETCH_CONCURRENCY);
+    const groupPages = await Promise.all(group.map((batch) => fetchOfficialMarketsBySlugs(batch)));
+    pages.push(...groupPages);
+  }
+
+  return pages.flat();
+}
+
+async function fetchOfficialMarketsBySlugs(slugs) {
+  if (!Array.isArray(slugs) || slugs.length === 0) {
+    return [];
+  }
+
+  const params = new URLSearchParams({
+    closed: "true",
+    limit: `${slugs.length}`,
+    order: "endDate",
+    ascending: "false"
+  });
+
+  for (const slug of slugs) {
+    params.append("slug", slug);
+  }
+
+  const url = `${config.gammaBaseUrl}/markets?${params.toString()}`;
+  const page = await fetchJson(url);
+
+  return Array.isArray(page) ? page : [];
+}
+
+function floorToFiveMinutes(timestamp) {
+  return Math.floor(timestamp / FIVE_MINUTES_MS) * FIVE_MINUTES_MS;
 }
