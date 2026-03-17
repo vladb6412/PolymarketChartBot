@@ -8,7 +8,7 @@ import {
 } from "./discovery.js";
 
 const DEFAULT_WINDOWS = [24, 24 * 7];
-const DEFAULT_CACHE_TTL_MS = 60_000;
+const DEFAULT_CACHE_TTL_MS = 5 * 60_000;
 const FIVE_MINUTES_MS = 5 * 60 * 1_000;
 const DEFAULT_SLUG_BATCH_SIZE = 100;
 const DEFAULT_FETCH_CONCURRENCY = 4;

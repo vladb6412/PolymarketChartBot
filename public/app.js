@@ -515,18 +515,17 @@ function navigateRun(offset) {
 }
 
 async function initialize() {
-  const [liveState, catalog, last24HourStats] = await Promise.all([
+  const [liveState, catalog] = await Promise.all([
     fetchJson("/api/status"),
-    fetchJson("/api/runs?limit=500"),
-    fetchJson("/api/stats/last-24h")
+    fetchJson("/api/runs?limit=500")
   ]);
 
   state.liveState = liveState;
-  state.last24HourStats = last24HourStats;
   mergeRunCatalog(catalog.runs);
   mergeRunCatalog(liveState.recentRuns || []);
   ensureSelectedRun();
   render();
+  refreshLast24HourStats().then(render).catch(console.error);
 
   const stream = new EventSource("/api/stream");
   stream.addEventListener("state", (event) => {
@@ -543,10 +542,14 @@ async function initialize() {
   });
 
   setInterval(() => {
-    Promise.all([refreshRunCatalog(), refreshLast24HourStats()])
+    refreshRunCatalog()
       .then(() => render())
       .catch(console.error);
   }, 60_000);
+
+  setInterval(() => {
+    refreshLast24HourStats().then(render).catch(console.error);
+  }, 5 * 60_000);
 }
 
 elements.axisToggleButton.addEventListener("click", () => {
