@@ -28,10 +28,14 @@ const elements = {
   marketRecording: document.querySelector("#market-recording"),
   marketPoints: document.querySelector("#market-points"),
   nextMarketWindow: document.querySelector("#next-market-window"),
-  statsUpCount: document.querySelector("#stats-up-count"),
-  statsDownCount: document.querySelector("#stats-down-count"),
-  statsMaxUpStreak: document.querySelector("#stats-max-up-streak"),
-  statsMaxDownStreak: document.querySelector("#stats-max-down-streak"),
+  stats24hUpCount: document.querySelector("#stats-24h-up-count"),
+  stats24hDownCount: document.querySelector("#stats-24h-down-count"),
+  stats24hMaxUpStreak: document.querySelector("#stats-24h-max-up-streak"),
+  stats24hMaxDownStreak: document.querySelector("#stats-24h-max-down-streak"),
+  stats7dUpCount: document.querySelector("#stats-7d-up-count"),
+  stats7dDownCount: document.querySelector("#stats-7d-down-count"),
+  stats7dMaxUpStreak: document.querySelector("#stats-7d-max-up-streak"),
+  stats7dMaxDownStreak: document.querySelector("#stats-7d-max-down-streak"),
   statsSummaryNote: document.querySelector("#stats-summary-note"),
   savedRuns: document.querySelector("#saved-runs"),
   selectedRunIdLabel: document.querySelector("#selected-run-id"),
@@ -428,18 +432,26 @@ function renderNavigation() {
 
 function renderLast24HourStats() {
   const stats = state.last24HourStats;
+  const stats24h = stats?.windows?.last24Hours || null;
+  const stats7d = stats?.windows?.last7Days || null;
 
-  elements.statsUpCount.textContent = `${stats?.upCount ?? "-"}`;
-  elements.statsDownCount.textContent = `${stats?.downCount ?? "-"}`;
-  elements.statsMaxUpStreak.textContent = `${stats?.maxConsecutiveUp ?? "-"}`;
-  elements.statsMaxDownStreak.textContent = `${stats?.maxConsecutiveDown ?? "-"}`;
+  elements.stats24hUpCount.textContent = `${stats24h?.upCount ?? "-"}`;
+  elements.stats24hDownCount.textContent = `${stats24h?.downCount ?? "-"}`;
+  elements.stats24hMaxUpStreak.textContent = `${stats24h?.maxConsecutiveUp ?? "-"}`;
+  elements.stats24hMaxDownStreak.textContent = `${stats24h?.maxConsecutiveDown ?? "-"}`;
+  elements.stats7dUpCount.textContent = `${stats7d?.upCount ?? "-"}`;
+  elements.stats7dDownCount.textContent = `${stats7d?.downCount ?? "-"}`;
+  elements.stats7dMaxUpStreak.textContent = `${stats7d?.maxConsecutiveUp ?? "-"}`;
+  elements.stats7dMaxDownStreak.textContent = `${stats7d?.maxConsecutiveDown ?? "-"}`;
 
   if (!stats) {
-    elements.statsSummaryNote.textContent = "Loading the last 24-hour outcome summary.";
+    elements.statsSummaryNote.textContent = "Loading official Polymarket outcome summaries.";
     return;
   }
 
-  elements.statsSummaryNote.textContent = `Official Polymarket closed outcomes over the last 24 hours. Counted runs: ${stats.concludedRuns}`;
+  elements.statsSummaryNote.textContent = `Official Polymarket closed outcomes. Counted runs: ${
+    stats24h?.concludedRuns ?? "-"
+  } in the last 24 hours, ${stats7d?.concludedRuns ?? "-"} in the last 7 days.`;
 }
 
 function render() {

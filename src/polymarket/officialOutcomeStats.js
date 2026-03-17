@@ -8,7 +8,7 @@ import {
   normalizeTrackedMarket
 } from "./discovery.js";
 
-const DEFAULT_WINDOW_HOURS = 24;
+const DEFAULT_WINDOWS = [24, 24 * 7];
 const DEFAULT_CACHE_TTL_MS = 60_000;
 const DEFAULT_PAGE_SIZE = 500;
 const DEFAULT_MAX_PAGES = 20;
@@ -16,14 +16,13 @@ const DEFAULT_MAX_PAGES = 20;
 let cachedOfficialStats = null;
 let inFlightOfficialStats = null;
 
-export async function fetchOfficialLast24HourOutcomeStats({
+export async function fetchOfficialOutcomeStats({
   now = Date.now(),
   useCache = true
 } = {}) {
   const shouldUseCache =
     useCache &&
     cachedOfficialStats &&
-    cachedOfficialStats.windowHours === DEFAULT_WINDOW_HOURS &&
     Date.now() - cachedOfficialStats.cachedAt < DEFAULT_CACHE_TTL_MS;
 
   if (shouldUseCache) {
@@ -34,12 +33,10 @@ export async function fetchOfficialLast24HourOutcomeStats({
     return inFlightOfficialStats;
   }
 
-  const task = loadOfficialLast24HourOutcomeStats({ now })
+  const task = loadOfficialOutcomeStats({ now })
     .then((payload) => {
       cachedOfficialStats = {
         cachedAt: Date.now(),
-        requestedNow: now,
-        windowHours: DEFAULT_WINDOW_HOURS,
         payload
       };
       return payload;
@@ -52,8 +49,9 @@ export async function fetchOfficialLast24HourOutcomeStats({
   return task;
 }
 
-async function loadOfficialLast24HourOutcomeStats({ now }) {
-  const cutoffIso = new Date(now - DEFAULT_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
+async function loadOfficialOutcomeStats({ now }) {
+  const longestWindowHours = Math.max(...DEFAULT_WINDOWS);
+  const cutoffIso = new Date(now - longestWindowHours * 60 * 60 * 1000).toISOString();
   const nowIso = new Date(now).toISOString();
   const markets = [];
   const seenMarketIds = new Set();
@@ -95,10 +93,20 @@ async function loadOfficialLast24HourOutcomeStats({ now }) {
     }
   }
 
-  return buildLast24HourOutcomeStats(markets, {
-    hours: DEFAULT_WINDOW_HOURS,
-    now
-  });
+  return {
+    asOf: new Date(now).toISOString(),
+    source: "polymarket_official",
+    windows: {
+      last24Hours: buildLast24HourOutcomeStats(markets, {
+        hours: 24,
+        now
+      }),
+      last7Days: buildLast24HourOutcomeStats(markets, {
+        hours: 24 * 7,
+        now
+      })
+    }
+  };
 }
 
 export function normalizeOfficialClosedOutcomeMarket(rawMarket) {

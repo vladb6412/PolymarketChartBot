@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { buildLast24HourOutcomeStats } from "../src/domain/outcomeStats.js";
 import { normalizeOfficialClosedOutcomeMarket } from "../src/polymarket/officialOutcomeStats.js";
 
 const rawClosedMarket = {
@@ -40,4 +41,45 @@ test("normalizeOfficialClosedOutcomeMarket ignores tied official outcomes", () =
     }),
     null
   );
+});
+
+test("official stats payload can support 24 hour and 7 day windows from the same market list", () => {
+  const markets = [
+    {
+      id: "m1",
+      startedAt: "2026-03-16T12:00:00.000Z",
+      endsAt: "2026-03-16T12:05:00.000Z",
+      outcomeKey: "UP",
+      source: "polymarket_official"
+    },
+    {
+      id: "m2",
+      startedAt: "2026-03-16T12:05:00.000Z",
+      endsAt: "2026-03-16T12:10:00.000Z",
+      outcomeKey: "DOWN",
+      source: "polymarket_official"
+    },
+    {
+      id: "m3",
+      startedAt: "2026-03-11T00:00:00.000Z",
+      endsAt: "2026-03-11T00:05:00.000Z",
+      outcomeKey: "DOWN",
+      source: "polymarket_official"
+    }
+  ];
+
+  const last24Hours = buildLast24HourOutcomeStats(markets, {
+    hours: 24,
+    now: new Date("2026-03-17T00:10:00.000Z").getTime()
+  });
+  const last7Days = buildLast24HourOutcomeStats(markets, {
+    hours: 24 * 7,
+    now: new Date("2026-03-17T00:10:00.000Z").getTime()
+  });
+
+  assert.equal(last24Hours.concludedRuns, 2);
+  assert.equal(last24Hours.upCount, 1);
+  assert.equal(last24Hours.downCount, 1);
+  assert.equal(last7Days.concludedRuns, 3);
+  assert.equal(last7Days.downCount, 2);
 });

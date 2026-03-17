@@ -131,30 +131,56 @@
           <section class="panel">
             <div class="panel-header">
               <div>
-                <p class="panel-label">Last 24 Hours</p>
+                <p class="panel-label">Official outcomes</p>
                 <h2>Outcome summary</h2>
               </div>
             </div>
-            <dl class="metrics">
-              <div>
-                <dt>Concluded UP</dt>
-                <dd id="stats-up-count">-</dd>
-              </div>
-              <div>
-                <dt>Concluded DOWN</dt>
-                <dd id="stats-down-count">-</dd>
-              </div>
-              <div>
-                <dt>Max consecutive UP</dt>
-                <dd id="stats-max-up-streak">-</dd>
-              </div>
-              <div>
-                <dt>Max consecutive DOWN</dt>
-                <dd id="stats-max-down-streak">-</dd>
-              </div>
-            </dl>
+            <div class="stats-stack">
+              <section class="stats-window">
+                <p class="stats-window-label">Last 24 hours</p>
+                <dl class="metrics">
+                  <div>
+                    <dt>Concluded UP</dt>
+                    <dd id="stats-24h-up-count">-</dd>
+                  </div>
+                  <div>
+                    <dt>Concluded DOWN</dt>
+                    <dd id="stats-24h-down-count">-</dd>
+                  </div>
+                  <div>
+                    <dt>Max consecutive UP</dt>
+                    <dd id="stats-24h-max-up-streak">-</dd>
+                  </div>
+                  <div>
+                    <dt>Max consecutive DOWN</dt>
+                    <dd id="stats-24h-max-down-streak">-</dd>
+                  </div>
+                </dl>
+              </section>
+              <section class="stats-window">
+                <p class="stats-window-label">Last 7 days</p>
+                <dl class="metrics">
+                  <div>
+                    <dt>Concluded UP</dt>
+                    <dd id="stats-7d-up-count">-</dd>
+                  </div>
+                  <div>
+                    <dt>Concluded DOWN</dt>
+                    <dd id="stats-7d-down-count">-</dd>
+                  </div>
+                  <div>
+                    <dt>Max consecutive UP</dt>
+                    <dd id="stats-7d-max-up-streak">-</dd>
+                  </div>
+                  <div>
+                    <dt>Max consecutive DOWN</dt>
+                    <dd id="stats-7d-max-down-streak">-</dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
             <p id="stats-summary-note" class="panel-note">
-              Uses official Polymarket closed outcomes from the last 24 hours.
+              Uses official Polymarket closed outcomes.
             </p>
           </section>
 
