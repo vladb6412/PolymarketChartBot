@@ -357,7 +357,17 @@ export class RunStore {
       await this.init();
     }
 
-    return this.getCachedRuns(limit, offset);
+    const normalizedLimit = Math.max(0, Number(limit) || 0);
+    const normalizedOffset = Math.max(0, Number(offset) || 0);
+    const runs = this.getCachedRuns(normalizedLimit, normalizedOffset);
+
+    return {
+      runs,
+      total: this.index.length,
+      offset: normalizedOffset,
+      limit: normalizedLimit,
+      hasMore: normalizedOffset + runs.length < this.index.length
+    };
   }
 
   getCachedRuns(limit = 50, offset = 0) {

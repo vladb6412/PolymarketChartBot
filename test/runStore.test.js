@@ -167,7 +167,8 @@ test("RunStore removes empty duplicate live runs and exposes the resumable run",
   const runFiles = await fs.readdir(runsDirectory);
 
   assert.equal(resumable.id, "resume-primary");
-  assert.equal(listedRuns.filter((entry) => entry.status === "live").length, 1);
+  assert.equal(listedRuns.total >= 1, true);
+  assert.equal(listedRuns.runs.filter((entry) => entry.status === "live").length, 1);
   assert.equal(runFiles.includes("resume-empty-duplicate.jsonl"), false);
   assert.equal(runFiles.includes("resume-primary.jsonl"), true);
 });

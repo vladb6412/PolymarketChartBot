@@ -1,14 +1,17 @@
 const monitorConfig = window.MONITOR_CONFIG || {};
+const RUN_PAGE_SIZE = 500;
 
 const state = {
   axisMode: "elapsed",
   followLive: true,
   liveState: null,
   runCatalog: [],
+  runCatalogTotal: 0,
   selectedRunId: null,
   selectedRun: null,
   loadVersion: 0,
-  loadingRunId: null
+  loadingRunId: null,
+  loadingMoreRuns: false
 };
 
 const elements = {
@@ -153,9 +156,38 @@ function mergeRunCatalog(runs) {
   state.runCatalog = [...merged.values()].sort(compareRuns);
 }
 
-async function refreshRunCatalog(limit = 500) {
-  const payload = await fetchJson(apiPath(`/runs?limit=${limit}`));
+async function refreshRunCatalog(limit = RUN_PAGE_SIZE, offset = 0) {
+  const payload = await fetchJson(apiPath(`/runs?limit=${limit}&offset=${offset}`));
   mergeRunCatalog(payload.runs);
+  state.runCatalogTotal = Math.max(
+    state.runCatalogTotal,
+    Number(payload.total) || state.runCatalog.length
+  );
+}
+
+async function loadMoreRuns() {
+  if (state.loadingMoreRuns || state.runCatalog.length >= state.runCatalogTotal) {
+    return;
+  }
+
+  state.loadingMoreRuns = true;
+
+  try {
+    await refreshRunCatalog(RUN_PAGE_SIZE, state.runCatalog.length);
+  } finally {
+    state.loadingMoreRuns = false;
+  }
+}
+
+async function ensureRunCatalogLoadedThrough(targetIndex) {
+  while (targetIndex >= state.runCatalog.length && state.runCatalog.length < state.runCatalogTotal) {
+    const previousLength = state.runCatalog.length;
+    await loadMoreRuns();
+
+    if (state.runCatalog.length === previousLength) {
+      break;
+    }
+  }
 }
 
 function getSelectedRunIndex() {
@@ -444,7 +476,7 @@ function renderCurrentPriceCard(outcome, valueElement, detailElement) {
 
 function renderNavigation() {
   const selectedIndex = getSelectedRunIndex();
-  const count = state.runCatalog.length;
+  const count = Math.max(state.runCatalogTotal, state.runCatalog.length);
 
   if (selectedIndex === -1) {
     elements.selectedRunPosition.textContent = count
@@ -493,7 +525,7 @@ function render() {
   elements.nextMarketWindow.textContent = nextMarket
     ? `${formatWindow(nextMarket.startDate, nextMarket.endDate)}`
     : "-";
-  elements.savedRuns.textContent = `${state.runCatalog.length}`;
+  elements.savedRuns.textContent = `${Math.max(state.runCatalogTotal, state.runCatalog.length)}`;
   elements.selectedRunIdLabel.textContent = state.selectedRunId || "-";
   elements.dataPath.textContent = storagePathLabel;
 
@@ -503,13 +535,22 @@ function render() {
   drawChart(runDetail);
 }
 
-function navigateRun(offset) {
+async function navigateRun(offset) {
   const selectedIndex = getSelectedRunIndex();
   if (selectedIndex === -1) {
     return;
   }
 
-  const target = state.runCatalog[selectedIndex + offset];
+  const targetIndex = selectedIndex + offset;
+  const totalCount = Math.max(state.runCatalogTotal, state.runCatalog.length);
+
+  if (targetIndex < 0 || targetIndex >= totalCount) {
+    return;
+  }
+
+  await ensureRunCatalogLoadedThrough(targetIndex);
+
+  const target = state.runCatalog[targetIndex];
   if (!target) {
     return;
   }
@@ -520,10 +561,11 @@ function navigateRun(offset) {
 async function initialize() {
   const [liveState, catalog] = await Promise.all([
     fetchJson(apiPath("/status")),
-    fetchJson(apiPath("/runs?limit=500"))
+    fetchJson(apiPath(`/runs?limit=${RUN_PAGE_SIZE}`))
   ]);
 
   state.liveState = liveState;
+  state.runCatalogTotal = Number(catalog.total) || 0;
   mergeRunCatalog(catalog.runs);
   mergeRunCatalog(liveState.recentRuns || []);
   ensureSelectedRun();
@@ -539,7 +581,7 @@ async function initialize() {
   });
 
   setInterval(() => {
-    refreshRunCatalog()
+    refreshRunCatalog(RUN_PAGE_SIZE)
       .then(() => render())
       .catch(console.error);
   }, 60_000);
@@ -558,20 +600,20 @@ elements.followLiveButton.addEventListener("click", () => {
 });
 
 elements.previousRunButton.addEventListener("click", () => {
-  navigateRun(1);
+  void navigateRun(1);
 });
 
 elements.nextRunButton.addEventListener("click", () => {
-  navigateRun(-1);
+  void navigateRun(-1);
 });
 
 window.addEventListener("keydown", (event) => {
   if (event.key === "ArrowLeft") {
-    navigateRun(1);
+    void navigateRun(1);
   }
 
   if (event.key === "ArrowRight") {
-    navigateRun(-1);
+    void navigateRun(-1);
   }
 });
 

@@ -105,7 +105,7 @@ function routeMonitorApi(request, response, url, context) {
     const offset = Number(url.searchParams.get("offset") || 0);
     context.monitor
       .listRuns(limit, offset)
-      .then((runs) => sendJson(response, 200, { runs }))
+      .then((payload) => sendJson(response, 200, payload))
       .catch((error) => sendJson(response, 500, { error: error.message }));
     return true;
   }
