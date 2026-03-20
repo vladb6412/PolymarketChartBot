@@ -137,6 +137,7 @@ export class RunStore {
 
       return this.normalizeSummary({
         id: runId,
+        datasetLabel: firstPoint.datasetLabel || null,
         status,
         marketId: firstPoint.marketId,
         slug: firstPoint.marketSlug,

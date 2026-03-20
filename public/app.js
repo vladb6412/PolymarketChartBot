@@ -32,6 +32,7 @@ const elements = {
   marketRecording: document.querySelector("#market-recording"),
   marketPoints: document.querySelector("#market-points"),
   nextMarketWindow: document.querySelector("#next-market-window"),
+  datasetLabel: document.querySelector("#dataset-label"),
   savedRuns: document.querySelector("#saved-runs"),
   selectedRunIdLabel: document.querySelector("#selected-run-id"),
   dataPath: document.querySelector("#data-path"),
@@ -39,6 +40,19 @@ const elements = {
   upDetail: document.querySelector("#up-detail"),
   downPrice: document.querySelector("#down-price"),
   downDetail: document.querySelector("#down-detail"),
+  polyfairSource: document.querySelector("#polyfair-source"),
+  polyfairStrategy: document.querySelector("#polyfair-strategy"),
+  polyfairSpot: document.querySelector("#polyfair-spot"),
+  polyfairStrike: document.querySelector("#polyfair-strike"),
+  polyfairVol: document.querySelector("#polyfair-vol"),
+  polyfairSeconds: document.querySelector("#polyfair-seconds"),
+  polyfairUpFair: document.querySelector("#polyfair-up-fair"),
+  polyfairUpDetail: document.querySelector("#polyfair-up-detail"),
+  polyfairUpLabel: document.querySelector("#polyfair-up-label"),
+  polyfairDownFair: document.querySelector("#polyfair-down-fair"),
+  polyfairDownDetail: document.querySelector("#polyfair-down-detail"),
+  polyfairDownLabel: document.querySelector("#polyfair-down-label"),
+  polyfairRecommendation: document.querySelector("#polyfair-recommendation"),
   chartCanvas: document.querySelector("#chart-canvas")
 };
 
@@ -47,6 +61,7 @@ const apiBasePath = `${monitorConfig.apiBasePath || "/api"}`.replace(/\/+$/, "")
 const defaultDurationMinutes = Number(monitorConfig.defaultDurationMinutes) || 5;
 const storagePathLabel =
   monitorConfig.storagePathLabel || "data/runs/*.jsonl.gz + live .jsonl";
+const datasetLabel = monitorConfig.datasetLabel || "iteration-2";
 const waitingChartTitle = monitorConfig.waitingChartTitle || "Waiting for market data";
 const failedChartTitle = monitorConfig.failedChartTitle || "Failed to load monitor";
 
@@ -93,12 +108,66 @@ function formatProbability(value) {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+function formatUsd(value) {
+  if (value === null || value === undefined) {
+    return "-";
+  }
+
+  return `$${Number(value).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+}
+
 function formatSpread(value) {
   if (value === null || value === undefined) {
     return "spread -";
   }
 
   return `spread ${(value * 100).toFixed(1)}c`;
+}
+
+function formatPolyfairDiff(value) {
+  if (value === null || value === undefined) {
+    return "diff -";
+  }
+
+  const cents = (value * 100).toFixed(1);
+  return `diff ${value >= 0 ? "+" : ""}${cents}c`;
+}
+
+function formatVolatility(value) {
+  if (value === null || value === undefined) {
+    return "-";
+  }
+
+  return `${(value * 100).toFixed(3)}%`;
+}
+
+function formatCountdownSeconds(value) {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+
+  const minutes = Math.floor(value / 60);
+  const seconds = value % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function strategyLabel(value) {
+  if (value === "LN_EWMA") {
+    return "Classic";
+  }
+
+  if (value === "LN_GARCH") {
+    return "Adaptive";
+  }
+
+  if (value === "T_EWMA") {
+    return "Fat Tails";
+  }
+
+  return value || "-";
 }
 
 function formatAxisMinutes(value) {
@@ -474,6 +543,65 @@ function renderCurrentPriceCard(outcome, valueElement, detailElement) {
   )}`;
 }
 
+function renderPolyfairLabel(element, value) {
+  element.textContent = value || "-";
+  element.className = "polyfair-label";
+
+  if (value === "UNDERVALUED") {
+    element.classList.add("polyfair-label-undervalued");
+  } else if (value === "OVERPRICED") {
+    element.classList.add("polyfair-label-overpriced");
+  } else {
+    element.classList.add("polyfair-label-neutral");
+  }
+}
+
+function renderPolyfairPanel(polyfairSnapshot) {
+  if (!polyfairSnapshot) {
+    elements.polyfairSource.textContent = "-";
+    elements.polyfairStrategy.textContent = "-";
+    elements.polyfairSpot.textContent = "-";
+    elements.polyfairStrike.textContent = "-";
+    elements.polyfairVol.textContent = "-";
+    elements.polyfairSeconds.textContent = "-";
+    elements.polyfairUpFair.textContent = "-";
+    elements.polyfairUpDetail.textContent = "No model yet";
+    renderPolyfairLabel(elements.polyfairUpLabel, null);
+    elements.polyfairDownFair.textContent = "-";
+    elements.polyfairDownDetail.textContent = "No model yet";
+    renderPolyfairLabel(elements.polyfairDownLabel, null);
+    elements.polyfairRecommendation.textContent = "Waiting for Polyfair-aligned data.";
+    elements.polyfairRecommendation.className = "panel-note polyfair-recommendation-neutral";
+    return;
+  }
+
+  const selectedStrategy =
+    polyfairSnapshot.strategies?.[polyfairSnapshot.defaultStrategy] || null;
+  const recommendation = polyfairSnapshot.recommendation || {
+    tone: "neutral",
+    text: "Fair value - no edge"
+  };
+
+  elements.polyfairSource.textContent = polyfairSnapshot.source || "-";
+  elements.polyfairStrategy.textContent = strategyLabel(polyfairSnapshot.defaultStrategy);
+  elements.polyfairSpot.textContent = formatUsd(polyfairSnapshot.spotPrice);
+  elements.polyfairStrike.textContent = formatUsd(polyfairSnapshot.strikePrice);
+  elements.polyfairVol.textContent = formatVolatility(polyfairSnapshot.volatility);
+  elements.polyfairSeconds.textContent = formatCountdownSeconds(polyfairSnapshot.secondsRemaining);
+  elements.polyfairUpFair.textContent = formatProbability(selectedStrategy?.fairUp);
+  elements.polyfairUpDetail.textContent = `${formatProbability(
+    selectedStrategy?.marketUp
+  )} market | ${formatPolyfairDiff(selectedStrategy?.diffUp)}`;
+  renderPolyfairLabel(elements.polyfairUpLabel, selectedStrategy?.labelUp);
+  elements.polyfairDownFair.textContent = formatProbability(selectedStrategy?.fairDown);
+  elements.polyfairDownDetail.textContent = `${formatProbability(
+    selectedStrategy?.marketDown
+  )} market | ${formatPolyfairDiff(selectedStrategy?.diffDown)}`;
+  renderPolyfairLabel(elements.polyfairDownLabel, selectedStrategy?.labelDown);
+  elements.polyfairRecommendation.textContent = recommendation.text;
+  elements.polyfairRecommendation.className = `panel-note polyfair-recommendation-${recommendation.tone}`;
+}
+
 function renderNavigation() {
   const selectedIndex = getSelectedRunIndex();
   const count = Math.max(state.runCatalogTotal, state.runCatalog.length);
@@ -500,6 +628,10 @@ function render() {
     latestPoint?.prices ||
     (state.followLive ? state.liveState?.currentSnapshot?.prices : null) ||
     {};
+  const polyfairSnapshot =
+    latestPoint?.polyfair ||
+    (state.followLive ? state.liveState?.currentPolyfairSnapshot : null) ||
+    null;
   const outcomes = run?.outcomes || [];
   const nextMarket = state.liveState?.nextMarket || null;
 
@@ -525,12 +657,14 @@ function render() {
   elements.nextMarketWindow.textContent = nextMarket
     ? `${formatWindow(nextMarket.startDate, nextMarket.endDate)}`
     : "-";
+  elements.datasetLabel.textContent = state.liveState?.datasetLabel || run?.datasetLabel || datasetLabel;
   elements.savedRuns.textContent = `${Math.max(state.runCatalogTotal, state.runCatalog.length)}`;
   elements.selectedRunIdLabel.textContent = state.selectedRunId || "-";
   elements.dataPath.textContent = storagePathLabel;
 
   renderCurrentPriceCard(prices[outcomes[0]?.key], elements.upPrice, elements.upDetail);
   renderCurrentPriceCard(prices[outcomes[1]?.key], elements.downPrice, elements.downDetail);
+  renderPolyfairPanel(polyfairSnapshot);
   renderNavigation();
   drawChart(runDetail);
 }

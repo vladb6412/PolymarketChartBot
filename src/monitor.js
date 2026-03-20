@@ -11,6 +11,7 @@ import {
 } from "./polymarket/discovery.js";
 import { PolymarketFeed } from "./polymarket/feed.js";
 import { fetchOfficialOutcomeStats } from "./polymarket/officialOutcomeStats.js";
+import { PolyfairTracker } from "./polyfair/tracker.js";
 
 function buildRunId(market) {
   return `${market.slug}-${market.startTimestamp}-${Date.now()}`
@@ -23,6 +24,7 @@ export class MonitorService extends EventEmitter {
   constructor(options = {}) {
     super();
     this.family = options.family || "btc-5m";
+    this.datasetLabel = options.datasetLabel || config.datasetLabel;
     this.discoverMarkets = options.discoverMarkets || discoverBtcFiveMinuteMarkets;
     this.officialStatsIntervalMinutes = options.officialStatsIntervalMinutes || 5;
     this.purgeRunIds = [...(options.purgeRunIds || [])];
@@ -30,9 +32,20 @@ export class MonitorService extends EventEmitter {
       dataDir: options.dataDir || config.dataDir
     });
     this.feed = null;
+    this.polyfair = new PolyfairTracker({
+      intervalMinutes: options.polyfairIntervalMinutes || options.officialStatsIntervalMinutes || 5
+    });
+    this.onPolyfairAnalysis = (analysis) => {
+      this.currentPolyfairSnapshot = analysis;
+      this.emitState();
+    };
+    this.onPolyfairStatus = (status) => {
+      this.emit("feed-status", status);
+    };
     this.currentMarket = null;
     this.currentRun = null;
     this.currentSnapshot = null;
+    this.currentPolyfairSnapshot = null;
     this.nextMarket = null;
     this.phase = "idle";
     this.lastDiscoveryAt = null;
@@ -46,6 +59,9 @@ export class MonitorService extends EventEmitter {
   async start() {
     await this.store.init();
     await this.purgeConfiguredRuns();
+    await this.polyfair.start();
+    this.polyfair.on("analysis", this.onPolyfairAnalysis);
+    this.polyfair.on("status", this.onPolyfairStatus);
     this.phase = "discovering";
     this.emitState();
     await this.refreshMarket();
@@ -66,6 +82,10 @@ export class MonitorService extends EventEmitter {
       this.feed = null;
     }
 
+    this.polyfair.stop();
+    this.polyfair.removeListener("analysis", this.onPolyfairAnalysis);
+    this.polyfair.removeListener("status", this.onPolyfairStatus);
+
     if (this.store.ready) {
       await this.store.flush();
     }
@@ -74,12 +94,14 @@ export class MonitorService extends EventEmitter {
   getState() {
     return {
       phase: this.phase,
+      datasetLabel: this.datasetLabel,
       serverTime: isoNow(),
       lastDiscoveryAt: this.lastDiscoveryAt,
       error: this.lastError,
       currentMarket: this.currentMarket,
       currentRun: this.currentRun,
       currentSnapshot: this.currentSnapshot,
+      currentPolyfairSnapshot: this.currentPolyfairSnapshot,
       nextMarket: this.nextMarket,
       recentRuns: this.store.getCachedRuns(20)
     };
@@ -162,6 +184,7 @@ export class MonitorService extends EventEmitter {
       resumableRun ||
       (await this.store.startRun({
         id: buildRunId(market),
+        datasetLabel: this.datasetLabel,
         status: "live",
         marketId: market.id,
         conditionId: market.conditionId,
@@ -177,8 +200,10 @@ export class MonitorService extends EventEmitter {
     this.currentMarket = market;
     this.currentRun = runSummary;
     this.currentSnapshot = null;
+    this.currentPolyfairSnapshot = null;
     this.phase = "live";
 
+    await this.polyfair.setMarket(market);
     this.attachFeed(market);
     this.emitState();
   }
@@ -212,14 +237,20 @@ export class MonitorService extends EventEmitter {
         marketQuestion: market.question,
         marketStartedAt: market.startDate,
         marketEndsAt: market.endDate,
+        datasetLabel: this.datasetLabel,
         elapsedMs: Math.max(
           0,
           new Date(snapshot.recordedAt).getTime() - new Date(market.startDate).getTime()
         )
       };
+      const polyfairSnapshot = this.polyfair.captureSnapshot(enrichedSnapshot);
+      if (polyfairSnapshot) {
+        enrichedSnapshot.polyfair = polyfairSnapshot;
+      }
 
       await this.store.appendSnapshot(this.currentRun.id, enrichedSnapshot);
       this.currentSnapshot = enrichedSnapshot;
+      this.currentPolyfairSnapshot = polyfairSnapshot;
       this.emitState();
     });
 
@@ -269,6 +300,7 @@ export class MonitorService extends EventEmitter {
     this.currentRun = null;
     this.currentMarket = null;
     this.currentSnapshot = null;
+    this.currentPolyfairSnapshot = null;
     this.phase = this.nextMarket ? "waiting_next" : "discovering";
     this.emitState();
   }
@@ -310,7 +342,10 @@ export function createFiveMinuteMonitorService() {
   return new MonitorService({
     family: "btc-5m",
     discoverMarkets: discoverBtcFiveMinuteMarkets,
-    officialStatsIntervalMinutes: 5
+    officialStatsIntervalMinutes: 5,
+    polyfairIntervalMinutes: 5,
+    datasetLabel: config.datasetLabel,
+    dataDir: path.join(config.dataDir, config.datasetLabel, "5minutebtc")
   });
 }
 
@@ -318,8 +353,10 @@ export function createFifteenMinuteMonitorService() {
   return new MonitorService({
     family: "btc-15m",
     discoverMarkets: discoverBtcFifteenMinuteMarkets,
-    dataDir: path.join(config.dataDir, "15minutebtc"),
+    dataDir: path.join(config.dataDir, config.datasetLabel, "15minutebtc"),
     officialStatsIntervalMinutes: 15,
+    polyfairIntervalMinutes: 15,
+    datasetLabel: config.datasetLabel,
     purgeRunIds: ["btc-updown-15m-1773761400-1773761400000-1773762224359"]
   });
 }

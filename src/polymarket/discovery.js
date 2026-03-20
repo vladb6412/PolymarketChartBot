@@ -117,6 +117,10 @@ export function normalizeTrackedMarket(rawMarket) {
     acceptingOrders: Boolean(rawMarket.acceptingOrders),
     active: Boolean(rawMarket.active),
     closed: Boolean(rawMarket.closed),
+    priceToBeat:
+      rawMarket.eventMetadata?.priceToBeat ??
+      rawMarket.events?.[0]?.eventMetadata?.priceToBeat ??
+      null,
     outcomes: outcomeDefinitions
   };
 }

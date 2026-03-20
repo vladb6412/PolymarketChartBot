@@ -135,11 +135,67 @@
           <section class="panel">
             <div class="panel-header">
               <div>
+                <p class="panel-label">Polyfair</p>
+                <h2>Recommendation</h2>
+              </div>
+            </div>
+            <dl class="metrics">
+              <div>
+                <dt>Source</dt>
+                <dd id="polyfair-source">-</dd>
+              </div>
+              <div>
+                <dt>Strategy</dt>
+                <dd id="polyfair-strategy">-</dd>
+              </div>
+              <div>
+                <dt>Spot</dt>
+                <dd id="polyfair-spot">-</dd>
+              </div>
+              <div>
+                <dt>Strike</dt>
+                <dd id="polyfair-strike">-</dd>
+              </div>
+              <div>
+                <dt>Volatility</dt>
+                <dd id="polyfair-vol">-</dd>
+              </div>
+              <div>
+                <dt>Time left</dt>
+                <dd id="polyfair-seconds">-</dd>
+              </div>
+            </dl>
+            <div class="polyfair-grid">
+              <article class="polyfair-card polyfair-card-up">
+                <p class="price-label">UP</p>
+                <p id="polyfair-up-fair" class="polyfair-value">-</p>
+                <p id="polyfair-up-detail" class="price-detail">No model yet</p>
+                <p id="polyfair-up-label" class="polyfair-label">-</p>
+              </article>
+              <article class="polyfair-card polyfair-card-down">
+                <p class="price-label">DOWN</p>
+                <p id="polyfair-down-fair" class="polyfair-value">-</p>
+                <p id="polyfair-down-detail" class="price-detail">No model yet</p>
+                <p id="polyfair-down-label" class="polyfair-label">-</p>
+              </article>
+            </div>
+            <p id="polyfair-recommendation" class="panel-note">
+              Waiting for Polyfair-aligned data.
+            </p>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
                 <p class="panel-label">Storage</p>
                 <h2>Saved data</h2>
               </div>
             </div>
             <dl class="metrics metrics-single">
+              <div>
+                <dt>Dataset</dt>
+                <dd id="dataset-label">iteration-2</dd>
+              </div>
               <div>
                 <dt>Saved runs</dt>
                 <dd id="saved-runs">-</dd>
@@ -150,7 +206,7 @@
               </div>
               <div>
                 <dt>Stored files</dt>
-                <dd id="data-path">data/15minutebtc/runs/*.jsonl.gz + live .jsonl</dd>
+                <dd id="data-path">data/iteration-2/15minutebtc/runs/*.jsonl.gz + live .jsonl</dd>
               </div>
             </dl>
             <p class="panel-note">
@@ -166,7 +222,8 @@
       window.MONITOR_CONFIG = {
         apiBasePath: "/api/15minutebtc",
         defaultDurationMinutes: 15,
-        storagePathLabel: "data/15minutebtc/runs/*.jsonl.gz + live .jsonl",
+        datasetLabel: "iteration-2",
+        storagePathLabel: "data/iteration-2/15minutebtc/runs/*.jsonl.gz + live .jsonl",
         waitingChartTitle: "Waiting for 15-minute market data",
         failedChartTitle: "Failed to load 15-minute monitor"
       };

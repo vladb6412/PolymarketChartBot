@@ -297,6 +297,13 @@ h2 {
   gap: 14px;
 }
 
+.polyfair-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
 .price-card {
   border-radius: 20px;
   padding: 18px;
@@ -308,6 +315,20 @@ h2 {
 }
 
 .price-card-down {
+  background: rgba(192, 58, 43, 0.08);
+}
+
+.polyfair-card {
+  border-radius: 20px;
+  padding: 18px;
+  border: 1px solid var(--panel-border);
+}
+
+.polyfair-card-up {
+  background: rgba(21, 127, 83, 0.08);
+}
+
+.polyfair-card-down {
   background: rgba(192, 58, 43, 0.08);
 }
 
@@ -326,6 +347,46 @@ h2 {
   margin: 10px 0 0;
   color: var(--muted);
   font: 700 0.78rem/1.4 "IBM Plex Mono", "SFMono-Regular", monospace;
+}
+
+.polyfair-value {
+  margin: 0;
+  font: 700 clamp(1.2rem, 1.6vw, 1.8rem) / 1 "Iowan Old Style", Georgia, serif;
+}
+
+.polyfair-label {
+  margin: 12px 0 0;
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font: 700 0.76rem/1 "IBM Plex Mono", "SFMono-Regular", monospace;
+  background: rgba(28, 35, 32, 0.08);
+}
+
+.polyfair-label-undervalued {
+  background: rgba(21, 127, 83, 0.14);
+  color: var(--up);
+}
+
+.polyfair-label-overpriced {
+  background: rgba(192, 58, 43, 0.14);
+  color: var(--down);
+}
+
+.polyfair-label-neutral {
+  color: var(--muted);
+}
+
+.polyfair-recommendation-alert {
+  color: var(--ink);
+}
+
+.polyfair-recommendation-lean {
+  color: var(--muted);
+}
+
+.polyfair-recommendation-neutral {
+  color: var(--muted);
 }
 
 .panel-note {
@@ -381,7 +442,8 @@ h2 {
   }
 
   .metrics,
-  .price-grid {
+  .price-grid,
+  .polyfair-grid {
     grid-template-columns: 1fr;
   }
 
