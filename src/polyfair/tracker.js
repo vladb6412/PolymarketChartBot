@@ -49,6 +49,40 @@ async function fetchStrikePriceForMarket(slug) {
   );
 }
 
+async function fetchBinanceMinuteOpen(startTimestamp) {
+  if (!Number.isFinite(startTimestamp)) {
+    return null;
+  }
+
+  const params = new URLSearchParams({
+    symbol: "BTCUSDT",
+    interval: "1m",
+    startTime: `${startTimestamp}`,
+    limit: "1"
+  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.requestTimeoutMs);
+
+  try {
+    const response = await fetch(`https://api.binance.com/api/v3/klines?${params.toString()}`, {
+      signal: controller.signal,
+      headers: {
+        accept: "application/json"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Binance strike lookup failed with status ${response.status}`);
+    }
+
+    const payload = await response.json();
+    const openPrice = Array.isArray(payload) && payload[0] ? toFiniteNumber(payload[0][1]) : null;
+    return openPrice;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export class PolyfairTracker extends EventEmitter {
   constructor(options = {}) {
     super();
@@ -105,6 +139,20 @@ export class PolyfairTracker extends EventEmitter {
         this.emit("status", {
           level: "warn",
           message: `Polyfair strike lookup failed for ${market.slug}: ${error.message}`
+        });
+      }
+    }
+
+    if (!this.strikePrice) {
+      try {
+        const startTimestamp =
+          market?.startTimestamp ??
+          (market?.startDate ? new Date(market.startDate).getTime() : null);
+        this.strikePrice = await fetchBinanceMinuteOpen(startTimestamp);
+      } catch (error) {
+        this.emit("status", {
+          level: "warn",
+          message: `Polyfair Binance strike fallback failed for ${market?.slug}: ${error.message}`
         });
       }
     }
@@ -178,4 +226,3 @@ export class PolyfairTracker extends EventEmitter {
     };
   }
 }
-
