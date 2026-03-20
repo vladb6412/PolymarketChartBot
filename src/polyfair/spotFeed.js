@@ -25,6 +25,7 @@ function parseSpotPayload(raw) {
 
     return {
       symbol: BTC_CHAINLINK_SYMBOL,
+      source: "chainlink_live",
       spotPrice,
       recordedAt: isoNow()
     };
@@ -141,4 +142,3 @@ export class PolyfairSpotFeed extends EventEmitter {
     });
   }
 }
-

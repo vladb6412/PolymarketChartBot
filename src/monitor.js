@@ -243,7 +243,7 @@ export class MonitorService extends EventEmitter {
           new Date(snapshot.recordedAt).getTime() - new Date(market.startDate).getTime()
         )
       };
-      const polyfairSnapshot = this.polyfair.captureSnapshot(enrichedSnapshot);
+      const polyfairSnapshot = await this.polyfair.captureSnapshot(enrichedSnapshot);
       if (polyfairSnapshot) {
         enrichedSnapshot.polyfair = polyfairSnapshot;
       }
