@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   POLYFAIR_STRATEGIES,
+  buildPolyfairSpotDeltaSnapshot,
   buildPolyfairRecommendation,
   buildPolyfairStrategySnapshot,
   calculatePolyfairFairPrices,
@@ -85,3 +86,28 @@ test("buildPolyfairStrategySnapshot includes labels and diffs", () => {
   assert.equal(snapshot.labelDown, "OVERPRICED");
 });
 
+test("buildPolyfairSpotDeltaSnapshot captures signed BTC move", () => {
+  assert.deepEqual(
+    buildPolyfairSpotDeltaSnapshot({
+      spotPrice: 100_125.5,
+      strikePrice: 100_100
+    }),
+    {
+      spotDeltaUsd: 25.5,
+      spotDeltaAbsUsd: 25.5,
+      spotDeltaDirection: "up"
+    }
+  );
+
+  assert.deepEqual(
+    buildPolyfairSpotDeltaSnapshot({
+      spotPrice: 99_980,
+      strikePrice: 100_100
+    }),
+    {
+      spotDeltaUsd: -120,
+      spotDeltaAbsUsd: 120,
+      spotDeltaDirection: "down"
+    }
+  );
+});

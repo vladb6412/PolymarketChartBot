@@ -25,6 +25,25 @@ const DEFAULT_VOLATILITY = Object.freeze({
   "15m": 0.0015
 });
 
+export function buildPolyfairSpotDeltaSnapshot({ spotPrice, strikePrice }) {
+  if (!Number.isFinite(spotPrice) || !Number.isFinite(strikePrice)) {
+    return {
+      spotDeltaUsd: null,
+      spotDeltaAbsUsd: null,
+      spotDeltaDirection: "unknown"
+    };
+  }
+
+  const spotDeltaUsd = spotPrice - strikePrice;
+
+  return {
+    spotDeltaUsd,
+    spotDeltaAbsUsd: Math.abs(spotDeltaUsd),
+    spotDeltaDirection:
+      spotDeltaUsd > 0 ? "up" : spotDeltaUsd < 0 ? "down" : "flat"
+  };
+}
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
@@ -441,4 +460,3 @@ export function buildPolyfairStrategySnapshot({
     alertDown: hasPolyfairAlert(diffDown)
   };
 }
-

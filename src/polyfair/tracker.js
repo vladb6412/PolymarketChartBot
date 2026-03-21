@@ -5,6 +5,7 @@ import { fetchJson } from "../lib/http.js";
 import {
   POLYFAIR_DEFAULT_STRATEGY,
   POLYFAIR_STRATEGIES,
+  buildPolyfairSpotDeltaSnapshot,
   buildPolyfairRecommendation,
   buildPolyfairStrategySnapshot,
   createPolyfairVolatilityState,
@@ -287,6 +288,10 @@ export class PolyfairTracker extends EventEmitter {
     const selectedStrategy =
       strategySnapshots[this.defaultStrategy] || strategySnapshots[POLYFAIR_DEFAULT_STRATEGY];
     const recommendation = buildPolyfairRecommendation(selectedStrategy);
+    const spotDeltaSnapshot = buildPolyfairSpotDeltaSnapshot({
+      spotPrice: this.latestSpot.spotPrice,
+      strikePrice: this.strikePrice
+    });
 
     return {
       source: "polyfair-aligned-v1",
@@ -295,6 +300,7 @@ export class PolyfairTracker extends EventEmitter {
       spotSource: this.latestSpot.source || "chainlink_live",
       strikePrice: this.strikePrice,
       strikeSource: this.strikeSource,
+      ...spotDeltaSnapshot,
       secondsRemaining,
       timeframe: timeframeKey(this.intervalMinutes),
       volatility: getPolyfairDisplayedVolatility(

@@ -44,6 +44,7 @@ const elements = {
   polyfairStrategy: document.querySelector("#polyfair-strategy"),
   polyfairSpot: document.querySelector("#polyfair-spot"),
   polyfairStrike: document.querySelector("#polyfair-strike"),
+  polyfairMove: document.querySelector("#polyfair-move"),
   polyfairVol: document.querySelector("#polyfair-vol"),
   polyfairSeconds: document.querySelector("#polyfair-seconds"),
   polyfairUpFair: document.querySelector("#polyfair-up-fair"),
@@ -117,6 +118,23 @@ function formatUsd(value) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })}`;
+}
+
+function formatUsdDelta(value, direction) {
+  if (value === null || value === undefined) {
+    return "-";
+  }
+
+  const absoluteValue = Math.abs(Number(value));
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  const locationLabel =
+    direction === "up"
+      ? "above strike"
+      : direction === "down"
+        ? "below strike"
+        : "at strike";
+
+  return `${sign}${formatUsd(absoluteValue)} ${locationLabel}`;
 }
 
 function formatSpread(value) {
@@ -562,6 +580,7 @@ function renderPolyfairPanel(polyfairSnapshot) {
     elements.polyfairStrategy.textContent = "-";
     elements.polyfairSpot.textContent = "-";
     elements.polyfairStrike.textContent = "-";
+    elements.polyfairMove.textContent = "-";
     elements.polyfairVol.textContent = "-";
     elements.polyfairSeconds.textContent = "-";
     elements.polyfairUpFair.textContent = "-";
@@ -586,6 +605,10 @@ function renderPolyfairPanel(polyfairSnapshot) {
   elements.polyfairStrategy.textContent = strategyLabel(polyfairSnapshot.defaultStrategy);
   elements.polyfairSpot.textContent = formatUsd(polyfairSnapshot.spotPrice);
   elements.polyfairStrike.textContent = formatUsd(polyfairSnapshot.strikePrice);
+  elements.polyfairMove.textContent = formatUsdDelta(
+    polyfairSnapshot.spotDeltaUsd,
+    polyfairSnapshot.spotDeltaDirection
+  );
   elements.polyfairVol.textContent = formatVolatility(polyfairSnapshot.volatility);
   elements.polyfairSeconds.textContent = formatCountdownSeconds(polyfairSnapshot.secondsRemaining);
   elements.polyfairUpFair.textContent = formatProbability(selectedStrategy?.fairUp);
