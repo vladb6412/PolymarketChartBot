@@ -5,6 +5,7 @@ const state = {
   axisMode: "elapsed",
   followLive: true,
   liveState: null,
+  valueAnalysis: null,
   runCatalog: [],
   runCatalogTotal: 0,
   selectedRunId: null,
@@ -54,6 +55,9 @@ const elements = {
   polyfairDownDetail: document.querySelector("#polyfair-down-detail"),
   polyfairDownLabel: document.querySelector("#polyfair-down-label"),
   polyfairRecommendation: document.querySelector("#polyfair-recommendation"),
+  recentValueSummary: document.querySelector("#recent-value-summary"),
+  recentValueRecommendation: document.querySelector("#recent-value-recommendation"),
+  recentValueWindows: document.querySelector("#recent-value-windows"),
   chartCanvas: document.querySelector("#chart-canvas")
 };
 
@@ -172,6 +176,39 @@ function formatCountdownSeconds(value) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function formatSignedUsd(value) {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+
+  const absolute = Math.abs(Number(value)).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${sign}$${absolute}`;
+}
+
+function formatElapsedSeconds(value) {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+
+  const totalSeconds = Math.max(0, Math.round(value / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatDiffCents(value) {
+  if (!Number.isFinite(value)) {
+    return "median -";
+  }
+
+  const cents = (value * 100).toFixed(1);
+  return `${value >= 0 ? "+" : ""}${cents}c vs median`;
+}
+
 function strategyLabel(value) {
   if (value === "LN_EWMA") {
     return "Classic";
@@ -208,6 +245,15 @@ async function fetchJson(url) {
   }
 
   return response.json();
+}
+
+async function refreshValueAnalysis() {
+  try {
+    state.valueAnalysis = await fetchJson(apiPath("/value-analysis"));
+    render();
+  } catch (error) {
+    console.error(error);
+  }
 }
 
 function getRunDurationMinutes(run) {
@@ -625,6 +671,104 @@ function renderPolyfairPanel(polyfairSnapshot) {
   elements.polyfairRecommendation.className = `panel-note polyfair-recommendation-${recommendation.tone}`;
 }
 
+function buildValueStatusBadge(entry) {
+  const label = entry?.label || "Unknown";
+  const status = entry?.status || "neutral";
+
+  return `<span class="value-badge value-badge-${status}">${label}</span>`;
+}
+
+function buildValueSideMarkup(sideLabel, entry) {
+  if (!entry) {
+    return `
+      <div class="value-side value-side-${sideLabel.toLowerCase()}">
+        <p class="price-label">${sideLabel}</p>
+        <p class="value-line">No recent comparison</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="value-side value-side-${sideLabel.toLowerCase()}">
+      <div class="value-side-header">
+        <p class="price-label">${sideLabel}</p>
+        ${buildValueStatusBadge(entry)}
+      </div>
+      <p class="value-line">Now ${formatProbability(entry.currentPrice)}</p>
+      <p class="value-line">Median ${formatProbability(entry.median)}</p>
+      <p class="value-line">Range ${formatProbability(entry.q25)}-${formatProbability(entry.q75)}</p>
+      <p class="price-detail">${formatDiffCents(entry.diffVsMedian)}</p>
+    </div>
+  `;
+}
+
+function renderRecentValuePanel(valueAnalysis) {
+  if (!valueAnalysis?.current) {
+    elements.recentValueSummary.textContent = "Waiting for the live value comparison.";
+    elements.recentValueRecommendation.textContent =
+      "No live value comparison yet.";
+    elements.recentValueRecommendation.className = "panel-note value-recommendation-neutral";
+    elements.recentValueWindows.innerHTML = "";
+    return;
+  }
+
+  const current = valueAnalysis.current;
+  const toleranceSeconds = Math.round((current.timeToleranceMs || 0) / 1000);
+
+  elements.recentValueSummary.innerHTML = `
+    <div class="value-summary-grid">
+      <div>
+        <p class="price-label">BTC move</p>
+        <p class="value-summary-value">${formatSignedUsd(current.deltaUsd)}</p>
+      </div>
+      <div>
+        <p class="price-label">Move bucket</p>
+        <p class="value-summary-value">${current.deltaBucket?.label || "-"}</p>
+      </div>
+      <div>
+        <p class="price-label">Elapsed</p>
+        <p class="value-summary-value">${formatElapsedSeconds(current.elapsedMs)}</p>
+      </div>
+      <div>
+        <p class="price-label">Comparator</p>
+        <p class="value-summary-value">same move bucket, ±${toleranceSeconds}s</p>
+      </div>
+    </div>
+  `;
+
+  elements.recentValueRecommendation.textContent =
+    valueAnalysis.recommendation?.text || "No live value comparison yet.";
+  elements.recentValueRecommendation.className = `panel-note value-recommendation-${
+    valueAnalysis.recommendation?.tone || "neutral"
+  }`;
+
+  const windowOrder = ["3h", "6h", "12h"];
+  elements.recentValueWindows.innerHTML = windowOrder
+    .map((key) => {
+      const entry = valueAnalysis.windows?.[key];
+
+      if (!entry) {
+        return "";
+      }
+
+      return `
+        <article class="value-window-card">
+          <div class="value-window-header">
+            <div>
+              <p class="price-label">${key}</p>
+              <p class="price-detail">${entry.sampleCount} points across ${entry.runCount} runs</p>
+            </div>
+          </div>
+          <div class="value-window-sides">
+            ${buildValueSideMarkup("UP", entry.up)}
+            ${buildValueSideMarkup("DOWN", entry.down)}
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
 function renderNavigation() {
   const selectedIndex = getSelectedRunIndex();
   const count = Math.max(state.runCatalogTotal, state.runCatalog.length);
@@ -688,6 +832,7 @@ function render() {
   renderCurrentPriceCard(prices[outcomes[0]?.key], elements.upPrice, elements.upDetail);
   renderCurrentPriceCard(prices[outcomes[1]?.key], elements.downPrice, elements.downDetail);
   renderPolyfairPanel(polyfairSnapshot);
+  renderRecentValuePanel(state.valueAnalysis);
   renderNavigation();
   drawChart(runDetail);
 }
@@ -716,12 +861,14 @@ async function navigateRun(offset) {
 }
 
 async function initialize() {
-  const [liveState, catalog] = await Promise.all([
+  const [liveState, catalog, valueAnalysis] = await Promise.all([
     fetchJson(apiPath("/status")),
-    fetchJson(apiPath(`/runs?limit=${RUN_PAGE_SIZE}`))
+    fetchJson(apiPath(`/runs?limit=${RUN_PAGE_SIZE}`)),
+    fetchJson(apiPath("/value-analysis")).catch(() => null)
   ]);
 
   state.liveState = liveState;
+  state.valueAnalysis = valueAnalysis;
   state.runCatalogTotal = Number(catalog.total) || 0;
   mergeRunCatalog(catalog.runs);
   mergeRunCatalog(liveState.recentRuns || []);
@@ -730,11 +877,16 @@ async function initialize() {
 
   const stream = new EventSource(apiPath("/stream"));
   stream.addEventListener("state", (event) => {
+    const previousRunId = state.liveState?.currentRun?.id || null;
     state.liveState = JSON.parse(event.data);
     mergeRunCatalog(state.liveState.recentRuns || []);
     appendLiveSnapshotIfNeeded();
     ensureSelectedRun();
     render();
+
+    if (state.liveState?.currentRun?.id !== previousRunId) {
+      void refreshValueAnalysis();
+    }
   });
 
   setInterval(() => {
@@ -742,6 +894,10 @@ async function initialize() {
       .then(() => render())
       .catch(console.error);
   }, 60_000);
+
+  setInterval(() => {
+    void refreshValueAnalysis();
+  }, 30_000);
 }
 
 elements.axisToggleButton.addEventListener("click", () => {

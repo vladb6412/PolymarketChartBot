@@ -60,6 +60,8 @@ async function serveStatic(requestPath, response) {
     safePath = "/previousstats.html";
   } else if (requestPath === "/15minutebtc") {
     safePath = "/15minutebtc.html";
+  } else if (requestPath === "/pricevalue") {
+    safePath = "/pricevalue.html";
   }
 
   const targetPath = path.join(publicDirectory, safePath);
@@ -114,6 +116,14 @@ function routeMonitorApi(request, response, url, context) {
     context.monitor
       .getLast24HourOutcomeStats()
       .then((stats) => sendJson(response, 200, stats))
+      .catch((error) => sendJson(response, 500, { error: error.message }));
+    return true;
+  }
+
+  if (url.pathname === `${context.apiBasePath}/value-analysis`) {
+    context.monitor
+      .getRecentValueAnalysis()
+      .then((analysis) => sendJson(response, 200, analysis))
       .catch((error) => sendJson(response, 500, { error: error.message }));
     return true;
   }

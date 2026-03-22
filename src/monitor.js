@@ -27,6 +27,9 @@ export class MonitorService extends EventEmitter {
     this.datasetLabel = options.datasetLabel || config.datasetLabel;
     this.discoverMarkets = options.discoverMarkets || discoverBtcFiveMinuteMarkets;
     this.officialStatsIntervalMinutes = options.officialStatsIntervalMinutes || 5;
+    this.valueLookbackHours = [...(options.valueLookbackHours || [3, 6, 12])];
+    this.valueTimeToleranceMs = options.valueTimeToleranceMs || 30_000;
+    this.valueDeltaBucketSizeUsd = options.valueDeltaBucketSizeUsd || 20;
     this.purgeRunIds = [...(options.purgeRunIds || [])];
     this.store = new RunStore({
       dataDir: options.dataDir || config.dataDir
@@ -327,6 +330,15 @@ export class MonitorService extends EventEmitter {
     });
   }
 
+  async getRecentValueAnalysis() {
+    return this.store.getRecentValueAnalysis({
+      currentSnapshot: this.currentSnapshot,
+      lookbackHours: this.valueLookbackHours,
+      timeToleranceMs: this.valueTimeToleranceMs,
+      deltaBucketSizeUsd: this.valueDeltaBucketSizeUsd
+    });
+  }
+
   async purgeConfiguredRuns() {
     if (this.purgeRunIds.length === 0) {
       return;
@@ -344,6 +356,7 @@ export function createFiveMinuteMonitorService() {
     discoverMarkets: discoverBtcFiveMinuteMarkets,
     officialStatsIntervalMinutes: 5,
     polyfairIntervalMinutes: 5,
+    valueTimeToleranceMs: 30_000,
     datasetLabel: config.datasetLabel,
     dataDir: path.join(config.dataDir, config.datasetLabel, "5minutebtc")
   });
@@ -356,6 +369,7 @@ export function createFifteenMinuteMonitorService() {
     dataDir: path.join(config.dataDir, config.datasetLabel, "15minutebtc"),
     officialStatsIntervalMinutes: 15,
     polyfairIntervalMinutes: 15,
+    valueTimeToleranceMs: 90_000,
     datasetLabel: config.datasetLabel,
     purgeRunIds: ["btc-updown-15m-1773761400-1773761400000-1773762224359"]
   });

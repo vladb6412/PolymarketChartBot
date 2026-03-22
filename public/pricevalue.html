@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BTC Price Value Map</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell shell-narrow">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Price Value</p>
+          <h1>BTC move vs UP/DOWN value</h1>
+          <p class="hero-copy">
+            Live comparison of current `UP` and `DOWN` prices against recent
+            historical snapshots from the last 3, 6, and 12 hours.
+          </p>
+        </div>
+        <div class="hero-actions">
+          <a href="/" class="button">Open 5m monitor</a>
+          <a href="/15minutebtc" class="button">Open 15m monitor</a>
+        </div>
+      </header>
+
+      <main class="page-stack">
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-label">Overview</p>
+              <h2>How it compares</h2>
+            </div>
+          </div>
+          <p class="panel-note panel-note-tight">
+            `5m` uses snapshots within `±30s` of the same elapsed time. `15m`
+            uses `±90s`. Both compare against the same BTC move bucket over the
+            last `3h`, `6h`, and `12h`.
+          </p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-label">5-Minute</p>
+              <h2 id="five-title">Waiting for 5m data</h2>
+            </div>
+            <span id="five-phase" class="badge badge-muted">-</span>
+          </div>
+          <div id="five-summary" class="value-summary">Waiting for 5m value data.</div>
+          <p id="five-recommendation" class="panel-note value-recommendation-neutral">
+            No 5m recommendation yet.
+          </p>
+          <div id="five-windows" class="value-window-grid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-label">15-Minute</p>
+              <h2 id="fifteen-title">Waiting for 15m data</h2>
+            </div>
+            <span id="fifteen-phase" class="badge badge-muted">-</span>
+          </div>
+          <div id="fifteen-summary" class="value-summary">Waiting for 15m value data.</div>
+          <p id="fifteen-recommendation" class="panel-note value-recommendation-neutral">
+            No 15m recommendation yet.
+          </p>
+          <div id="fifteen-windows" class="value-window-grid"></div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="/pricevalue.js"></script>
+  </body>
+</html>

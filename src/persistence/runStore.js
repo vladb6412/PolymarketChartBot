@@ -7,6 +7,10 @@ import {
   inferOutcomeFromPoints,
   selectRepresentativeCompletedRuns
 } from "../domain/outcomeStats.js";
+import {
+  buildRecentValueAnalysis,
+  normalizeComparableSnapshot
+} from "../domain/recentValueAnalysis.js";
 import { ensureDirectory, readJsonFile, writeJsonFile } from "../lib/fs.js";
 import { compareIsoStrings, isoNow } from "../lib/time.js";
 import {
@@ -31,6 +35,7 @@ export class RunStore {
     this.indexWriteTimer = null;
     this.pendingCompression = new Map();
     this.last24HourStatsCache = null;
+    this.recentComparableSnapshotsCache = null;
   }
 
   async init() {
@@ -447,6 +452,86 @@ export class RunStore {
 
   invalidateDerivedCaches() {
     this.last24HourStatsCache = null;
+    this.recentComparableSnapshotsCache = null;
+  }
+
+  async getRecentComparableSnapshots(options = {}) {
+    if (!this.ready) {
+      await this.init();
+    }
+
+    const now = options.now ?? Date.now();
+    const maxHours = Math.max(1, Number(options.maxHours) || 12);
+    const cutoff = now - maxHours * 60 * 60 * 1000;
+    const useCache =
+      this.recentComparableSnapshotsCache &&
+      this.recentComparableSnapshotsCache.cutoff <= cutoff &&
+      now - this.recentComparableSnapshotsCache.computedAt < 30_000;
+
+    if (useCache) {
+      return this.recentComparableSnapshotsCache.points;
+    }
+
+    const candidateRuns = this.index.filter((entry) => {
+      if (entry.status === "live" || entry.status === "interrupted") {
+        return false;
+      }
+
+      const endTimestamp = timestampOf(entry.endsAt || entry.endedAt);
+      return endTimestamp >= cutoff;
+    });
+    const points = [];
+
+    for (const summary of candidateRuns) {
+      const filePath = await this.resolveRunFilePath(summary.id, summary);
+      const runPoints = await readRunArtifactPoints(filePath);
+
+      for (const point of runPoints) {
+        const normalized = normalizeComparableSnapshot(point);
+
+        if (!normalized || normalized.recordedAtMs < cutoff) {
+          continue;
+        }
+
+        points.push(normalized);
+      }
+    }
+
+    this.recentComparableSnapshotsCache = {
+      computedAt: now,
+      cutoff,
+      points
+    };
+
+    return points;
+  }
+
+  async getRecentValueAnalysis(options = {}) {
+    if (!this.ready) {
+      await this.init();
+    }
+
+    const currentSnapshot = options.currentSnapshot;
+
+    if (!currentSnapshot) {
+      return null;
+    }
+
+    const lookbackHours = options.lookbackHours || [3, 6, 12];
+    const maxHours = Math.max(...lookbackHours);
+    const historicalSnapshots = await this.getRecentComparableSnapshots({
+      maxHours,
+      now: options.now
+    });
+
+    return buildRecentValueAnalysis({
+      currentSnapshot,
+      historicalSnapshots,
+      lookbackHours,
+      now: options.now ?? Date.now(),
+      timeToleranceMs: options.timeToleranceMs,
+      deltaBucketSizeUsd: options.deltaBucketSizeUsd
+    });
   }
 
   async findResumableRun(market) {

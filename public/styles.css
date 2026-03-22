@@ -395,6 +395,10 @@ h2 {
   font: 700 0.78rem/1.5 "IBM Plex Mono", "SFMono-Regular", monospace;
 }
 
+.panel-note-tight {
+  margin-top: 0;
+}
+
 .stats-stack {
   display: grid;
   gap: 14px;
@@ -413,6 +417,112 @@ h2 {
   font: 700 0.78rem/1.2 "IBM Plex Mono", "SFMono-Regular", monospace;
   text-transform: uppercase;
   letter-spacing: 0.1em;
+}
+
+.value-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+
+.value-summary-value {
+  margin: 0;
+  font: 700 0.95rem/1.4 "IBM Plex Mono", "SFMono-Regular", monospace;
+  word-break: break-word;
+}
+
+.value-window-grid {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.value-window-card {
+  border: 1px solid rgba(28, 35, 32, 0.08);
+  border-radius: 18px;
+  padding: 16px;
+  background: rgba(255, 250, 241, 0.55);
+}
+
+.value-window-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 12px;
+}
+
+.value-window-sides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.value-side {
+  border: 1px solid rgba(28, 35, 32, 0.08);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 250, 241, 0.7);
+}
+
+.value-side-up {
+  background: rgba(21, 127, 83, 0.06);
+}
+
+.value-side-down {
+  background: rgba(192, 58, 43, 0.06);
+}
+
+.value-side-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.value-line {
+  margin: 6px 0 0;
+  font: 700 0.82rem/1.35 "IBM Plex Mono", "SFMono-Regular", monospace;
+  color: var(--ink);
+}
+
+.value-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 7px 11px;
+  font: 700 0.72rem/1 "IBM Plex Mono", "SFMono-Regular", monospace;
+  background: rgba(28, 35, 32, 0.08);
+  color: var(--muted);
+}
+
+.value-badge-undervalued {
+  background: rgba(21, 127, 83, 0.16);
+  color: var(--up);
+}
+
+.value-badge-overvalued {
+  background: rgba(192, 58, 43, 0.16);
+  color: var(--down);
+}
+
+.value-badge-fair {
+  background: rgba(28, 35, 32, 0.08);
+  color: var(--ink);
+}
+
+.value-badge-insufficient {
+  background: rgba(28, 35, 32, 0.06);
+  color: var(--muted);
+}
+
+.value-recommendation-alert {
+  color: var(--ink);
+}
+
+.value-recommendation-neutral {
+  color: var(--muted);
 }
 
 @media (max-width: 1100px) {
@@ -443,7 +553,9 @@ h2 {
 
   .metrics,
   .price-grid,
-  .polyfair-grid {
+  .polyfair-grid,
+  .value-summary-grid,
+  .value-window-sides {
     grid-template-columns: 1fr;
   }
 
